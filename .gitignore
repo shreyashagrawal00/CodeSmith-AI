@@ -1,0 +1,72 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[oc]
+*.pyo
+*.pyd
+*.pyc
+build/
+dist/
+wheels/
+*.egg-info/
+.eggs/
+*.egg
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env.local
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+# NEVER commit real API keys — use .env.example as the committed template
+.env
+backend/.env
+*.env
+
+# ─── LangGraph / LangChain ────────────────────────────────────────────────────
+# LangGraph checkpoint SQLite database (MemorySaver writes here locally)
+*.db
+*.sqlite3
+langgraph.json
+
+# ─── Generated Project Output ─────────────────────────────────────────────────
+# These are runtime outputs — large, auto-generated, and user-specific
+backend/generated_projects/
+*.zip
+
+# ─── IDE & Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+
+# ─── Testing & Coverage ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.coverage
+.nyc_output/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+# Don't ignore docker-compose.yml — that's source-controlled
+.dockerignore
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.python-version
