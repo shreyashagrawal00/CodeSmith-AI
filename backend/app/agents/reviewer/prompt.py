@@ -1,4 +1,4 @@
-﻿from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 REVIEW_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -14,7 +14,9 @@ Review the backend and frontend code provided for:
 - Code smells and anti-patterns
 - Missing error handling
 
-Return a detailed review report. Set approved=true only if the code is production-ready.
+Return a detailed review report. 
+Calculate a numerical quality_score from 0.0 to 100.0. 
+Set approved=true ONLY if quality_score is 80.0 or higher.
 Return ONLY the requested structured output.
             """,
         ),

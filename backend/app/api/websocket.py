@@ -55,7 +55,7 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
                 last_live_count = len(live_log)
 
             # ── Job completion ─────────────────────────────────────────────
-            if job.get("status") in ("completed", "failed"):
+            if job.get("status") in ("completed", "failed", "paused"):
                 await websocket.send_text(json.dumps({
                     "type": "done",
                     "status": job.get("status"),

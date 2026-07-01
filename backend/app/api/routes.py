@@ -1,17 +1,24 @@
-﻿import asyncio
+import asyncio
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.services.workflow_service import create_job, get_job, run_workflow
+from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow
 from app.services.project_service import write_project_files
 from app.services.report_service import zip_project
+
+from app.services.preview_service import start_preview
 
 router = APIRouter()
 
 
 class ProjectRequest(BaseModel):
     prompt: str
+
+
+class ApprovalRequest(BaseModel):
+    approved: bool
+    feedback: str = ""
 
 
 @router.post("/generate")
@@ -31,11 +38,18 @@ async def _run_and_save(job_id: str):
     job = get_job(job_id)
     if job and job.get("status") == "completed":
         try:
-            write_project_files(job_id, job)
+            project_dir = write_project_files(job_id, job)
             zip_project(job_id)
+            # Start background live preview
+            preview_res = start_preview(job_id, project_dir)
+            if preview_res.get("success"):
+                job["preview"] = {
+                    "frontend_url": preview_res["frontend_url"],
+                    "backend_url": preview_res["backend_url"]
+                }
         except Exception as e:
             job["status"] = "failed"
-            job["error"] = f"File write failed: {str(e)}"
+            job["error"] = f"File write or preview failed: {str(e)}"
 
 
 @router.get("/status/{job_id}")
@@ -59,9 +73,22 @@ async def get_result(job_id: str):
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.get("status") != "completed":
-        raise HTTPException(status_code=202, detail="Job not completed yet")
+    if job.get("status") not in ("completed", "paused"):
+        raise HTTPException(status_code=202, detail="Job not completed or paused yet")
     return job
+
+
+@router.post("/approve/{job_id}")
+async def approve_job(job_id: str, request: ApprovalRequest, background_tasks: BackgroundTasks):
+    """
+    Submit approval or feedback for a paused job to resume the LangGraph workflow.
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    background_tasks.add_task(resume_workflow, job_id, request.approved, request.feedback)
+    return {"status": "resumed", "message": "Workflow resumed with feedback."}
 
 
 @router.get("/download/{job_id}")

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { CheckCircle2, Loader2, Hourglass } from "lucide-react";
 
 const AGENT_ROLES = [
@@ -44,7 +44,7 @@ export default function ProgressBar({ currentAgent, log, status }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {AGENT_ROLES.map((agent, index) => {
+        {AGENT_ROLES.map((agent) => {
           const isCompleted = completedAgents.has(agent.id) || (status === "completed");
           const isActive = currentAgent === agent.id && status === "running";
           

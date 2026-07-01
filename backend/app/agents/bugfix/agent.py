@@ -29,8 +29,23 @@ class BugfixAgent(BaseLLMAgent):
             state=state,
         )
         self._emit(state, "success", f"✅ Bugfix complete", f"{len(response.bugs_found)} bugs fixed | {len(response.changes_summary)} changes")
+        
+        # Merge fixed code back into state dictionaries
+        backend_code = state.get("backend_code", {}).copy()
+        if response.fixed_backend_code:
+            backend_code["main_file"] = response.fixed_backend_code
+            
+        frontend_code = state.get("frontend_code", {}).copy()
+        if response.fixed_frontend_code:
+            frontend_code["main_app_code"] = response.fixed_frontend_code
+
+        new_iterations = state.get("correction_iterations", 0) + 1
+        
         return {
             "bugfix_report": response.model_dump(),
+            "backend_code": backend_code,
+            "frontend_code": frontend_code,
+            "correction_iterations": new_iterations,
             "current_agent": "BugFixer",
             "log": [{"agent": "BugFixer", "status": "completed"}],
             "live_log": state.pop("live_log", []),

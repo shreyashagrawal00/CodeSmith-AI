@@ -43,6 +43,18 @@ class ProjectState(TypedDict):
     status: str
     current_agent: str
 
+    # Dynamic Task Queue for orchestration routing
+    task_queue: List[str]
+
+    # Human-in-the-loop / approvals
+    human_feedback: str
+    approval_granted: bool
+
+    # Iterative self-correction loop state
+    review_approved: bool
+    quality_score: float
+    correction_iterations: int
+
     # Reducer to automatically merge/append logs from parallel executing agents
     log: Annotated[list, operator.add]
 

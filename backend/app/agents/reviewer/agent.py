@@ -23,10 +23,13 @@ class ReviewerAgent(BaseLLMAgent):
             },
             state=state,
         )
-        verdict = "approved ✅" if response.approved else "needs fixes ⚠️"
-        self._emit(state, "success" if response.approved else "warning", f"Review complete — {verdict}", f"Quality: {response.overall_quality[:80]}")
+        approved = response.approved and (response.quality_score >= 80.0)
+        verdict = "approved ✅" if approved else "needs fixes ⚠️"
+        self._emit(state, "success" if approved else "warning", f"Review complete — {verdict}", f"Quality Score: {response.quality_score} | {response.overall_quality[:80]}")
         return {
             "review_report": response.model_dump(),
+            "quality_score": response.quality_score,
+            "review_approved": approved,
             "current_agent": "Reviewer",
             "log": [{"agent": "Reviewer", "status": "completed"}],
             "live_log": state.pop("live_log", []),

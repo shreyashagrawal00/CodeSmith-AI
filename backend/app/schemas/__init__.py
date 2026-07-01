@@ -49,6 +49,7 @@ class FrontendCode(BaseModel):
 # 6. Reviewer Agent Output Schema
 class ReviewReport(BaseModel):
     overall_quality: str = Field(description="High-level assessment of code quality")
+    quality_score: float = Field(default=100.0, description="Numerical quality score from 0.0 to 100.0")
     backend_issues: List[str] = Field(default=[], description="List of issues found in backend code")
     frontend_issues: List[str] = Field(default=[], description="List of issues found in frontend code")
     code_smells: List[str] = Field(default=[], description="Refactoring opportunities / smells")
@@ -72,7 +73,7 @@ class TestingReport(BaseModel):
 
 # 9. Bug Fix Engineer Agent Output Schema
 class BugfixReport(BaseModel):
-    bugs_found: List[Dict[str, Any]] = Field(default=[], description="Details of bugs addressed")
+    bugs_found: List[str] = Field(default=[], description="List of descriptions of bugs addressed")
     fixed_backend_code: str = Field(description="Patched/updated backend file contents")
     fixed_frontend_code: str = Field(description="Patched/updated frontend file contents")
     changes_summary: List[str] = Field(default=[], description="Summary log of changes made")
