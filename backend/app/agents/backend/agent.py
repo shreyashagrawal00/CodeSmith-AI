@@ -31,7 +31,7 @@ class BackendAgent(BaseLLMAgent):
         return {
             "backend_code": response.model_dump(),
             "log": [{"agent": "BackendEngineer", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

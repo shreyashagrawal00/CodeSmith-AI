@@ -19,6 +19,7 @@ class SecurityAgent(BaseLLMAgent):
             schema=SecurityReport,
             inputs={
                 "backend_code": str(state.get("backend_code", {})),
+                "frontend_code": str(state.get("frontend_code", {})),
                 "database_schema": str(state.get("database_schema", {})),
             },
             state=state,
@@ -31,7 +32,7 @@ class SecurityAgent(BaseLLMAgent):
             "security_report": response.model_dump(),
             "current_agent": "SecurityExpert",
             "log": [{"agent": "SecurityExpert", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

@@ -1,4 +1,4 @@
-﻿from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 BUGFIX_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -7,8 +7,10 @@ BUGFIX_PROMPT = ChatPromptTemplate.from_messages(
             """
 You are a Bug-Fix Specialist and expert software debugger.
 
-Based on the review report and security findings, fix all identified issues in the backend and frontend code.
-Return updated, corrected code with a summary of all changes made.
+Based on the review report and security findings, fix all identified issues in both the backend and frontend code.
+When patching code, output the fixed files in `fixed_backend_files` and `fixed_frontend_files` dictionaries.
+The keys MUST correspond to the original fields (e.g. `main_file`, `routes_code`, `models_code`, `main_app_code`, `styles_code`, or specific component names like `Header.jsx`).
+Only include the files you actually modified.
 
 Return ONLY the requested structured output.
             """,

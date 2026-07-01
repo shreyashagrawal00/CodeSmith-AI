@@ -31,7 +31,7 @@ class ArchitectAgent(BaseLLMAgent):
             "architecture": response.model_dump(),
             "current_agent": "Architect",
             "log": [{"agent": "Architect", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

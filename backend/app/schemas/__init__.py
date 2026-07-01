@@ -68,14 +68,15 @@ class SecurityReport(BaseModel):
 class TestingReport(BaseModel):
     unit_tests_code: str = Field(description="Pytest/Vitest code for unit testing")
     integration_tests_code: str = Field(description="Integration/API endpoint tests code")
+    frontend_tests_code: str = Field(default="", description="Frontend component tests (e.g., React Testing Library)")
     test_coverage_estimate: str = Field(description="Estimate of test coverage percentage/report")
     test_cases: List[Dict[str, Any]] = Field(default=[], description="List of generated test scenarios")
 
 # 9. Bug Fix Engineer Agent Output Schema
 class BugfixReport(BaseModel):
     bugs_found: List[str] = Field(default=[], description="List of descriptions of bugs addressed")
-    fixed_backend_code: str = Field(description="Patched/updated backend file contents")
-    fixed_frontend_code: str = Field(description="Patched/updated frontend file contents")
+    fixed_backend_files: Dict[str, str] = Field(default={}, description="Map of backend keys (e.g. 'main_file', 'routes_code') to their updated file contents")
+    fixed_frontend_files: Dict[str, str] = Field(default={}, description="Map of frontend keys (e.g. 'main_app_code', 'components_code', 'styles_code') to their updated file contents")
     changes_summary: List[str] = Field(default=[], description="Summary log of changes made")
 
 # 10. Documentation Engineer Agent Output Schema

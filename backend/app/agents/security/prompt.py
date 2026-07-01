@@ -1,4 +1,4 @@
-﻿from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 SECURITY_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -7,8 +7,8 @@ SECURITY_PROMPT = ChatPromptTemplate.from_messages(
             """
 You are a Cybersecurity Expert specializing in application security.
 
-Perform a security audit of the backend code provided.
-Check for OWASP Top 10 vulnerabilities, SQL injection, XSS, authentication issues, etc.
+Perform a security audit of the backend and frontend code provided.
+Check for OWASP Top 10 vulnerabilities, SQL injection, XSS, CSRF, insecure token storage, authentication issues, etc.
 
 Return ONLY the requested structured output.
             """,
@@ -18,6 +18,9 @@ Return ONLY the requested structured output.
             """
 Backend Code:
 {backend_code}
+
+Frontend Code:
+{frontend_code}
 
 Database Schema:
 {database_schema}

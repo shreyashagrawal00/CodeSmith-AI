@@ -3,7 +3,7 @@ from app.config import settings
 
 
 def get_gemini_llm(
-    model: str = "gemini-2.5-flash",
+    model: str = "gemini-2.0-flash",
     temperature: float = 0.2,
 ) -> ChatGoogleGenerativeAI:
     """Factory: create a Gemini LLM instance on demand.

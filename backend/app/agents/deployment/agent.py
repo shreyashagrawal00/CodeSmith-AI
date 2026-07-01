@@ -34,7 +34,7 @@ class DeploymentAgent(BaseLLMAgent):
             "current_agent": "DevOps",
             "status": "completed",
             "log": [{"agent": "DevOps", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

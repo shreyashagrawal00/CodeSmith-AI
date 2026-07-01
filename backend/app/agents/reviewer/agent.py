@@ -32,7 +32,7 @@ class ReviewerAgent(BaseLLMAgent):
             "review_approved": approved,
             "current_agent": "Reviewer",
             "log": [{"agent": "Reviewer", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

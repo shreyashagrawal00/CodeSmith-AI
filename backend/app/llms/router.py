@@ -18,14 +18,15 @@ from app.llms.mistral import get_mistral_llm
 logger = logging.getLogger(__name__)
 
 # Agent-to-provider routing table.
-# Agents that are not listed default to Gemini.
+# Groq is the default primary for speed & free-tier quota preservation.
+# Gemini free-tier has only 20 requests/day, so it is used as a fallback.
 AGENT_PROVIDER_MAP: dict[str, str] = {
     # Creative reasoning / PM / Architecture
-    "pm": "gemini",
-    "architect": "gemini",
-    "database_designer": "gemini",
-    "bugfix": "gemini",
-    "deployment": "gemini",
+    "pm": "groq",
+    "architect": "groq",
+    "database_designer": "groq",
+    "bugfix": "groq",
+    "deployment": "groq",
     # Fast code generation
     "backend": "groq",
     "frontend": "groq",

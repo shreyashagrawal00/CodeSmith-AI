@@ -44,7 +44,10 @@ class ProjectState(TypedDict):
     current_agent: str
 
     # Dynamic Task Queue for orchestration routing
-    task_queue: List[str]
+    # Plain field — only sequential nodes update it, so no reducer is needed.
+    # Parallel nodes (database_designer, backend, frontend) must NOT write to
+    # this key; the downstream reviewer node handles cleanup for all of them.
+    task_queue: list
 
     # Human-in-the-loop / approvals
     human_feedback: str

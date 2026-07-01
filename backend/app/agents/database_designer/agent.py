@@ -28,7 +28,7 @@ class DatabaseDesignerAgent(BaseLLMAgent):
         return {
             "database_schema": response.model_dump(),
             "log": [{"agent": "DatabaseDesigner", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

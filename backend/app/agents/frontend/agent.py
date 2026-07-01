@@ -31,7 +31,7 @@ class FrontendAgent(BaseLLMAgent):
         return {
             "frontend_code": response.model_dump(),
             "log": [{"agent": "FrontendEngineer", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

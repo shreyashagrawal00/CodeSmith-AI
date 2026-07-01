@@ -20,6 +20,7 @@ class TestingAgent(BaseLLMAgent):
             schema=TestingReport,
             inputs={
                 "backend_code": str(state.get("backend_code", {})),
+                "frontend_code": str(state.get("frontend_code", {})),
                 "api_design": arch.get("api_design", ""),
             },
             state=state,
@@ -29,7 +30,7 @@ class TestingAgent(BaseLLMAgent):
             "testing_report": response.model_dump(),
             "current_agent": "QAEngineer",
             "log": [{"agent": "QAEngineer", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

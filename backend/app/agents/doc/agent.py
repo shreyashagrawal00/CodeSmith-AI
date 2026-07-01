@@ -33,7 +33,7 @@ class DocAgent(BaseLLMAgent):
             "documentation": response.model_dump(),
             "current_agent": "TechWriter",
             "log": [{"agent": "TechWriter", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

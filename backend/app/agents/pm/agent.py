@@ -25,7 +25,7 @@ class PMAgent(BaseLLMAgent):
             "requirements": response.model_dump(),
             "current_agent": "PM",
             "log": [{"agent": "PM", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 

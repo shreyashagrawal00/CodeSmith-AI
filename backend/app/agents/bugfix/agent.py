@@ -32,12 +32,17 @@ class BugfixAgent(BaseLLMAgent):
         
         # Merge fixed code back into state dictionaries
         backend_code = state.get("backend_code", {}).copy()
-        if response.fixed_backend_code:
-            backend_code["main_file"] = response.fixed_backend_code
+        if response.fixed_backend_files:
+            for k, v in response.fixed_backend_files.items():
+                backend_code[k] = v
             
         frontend_code = state.get("frontend_code", {}).copy()
-        if response.fixed_frontend_code:
-            frontend_code["main_app_code"] = response.fixed_frontend_code
+        if response.fixed_frontend_files:
+            for k, v in response.fixed_frontend_files.items():
+                if k in frontend_code.get("components_code", {}):
+                    frontend_code["components_code"][k] = v
+                else:
+                    frontend_code[k] = v
 
         new_iterations = state.get("correction_iterations", 0) + 1
         
@@ -48,7 +53,7 @@ class BugfixAgent(BaseLLMAgent):
             "correction_iterations": new_iterations,
             "current_agent": "BugFixer",
             "log": [{"agent": "BugFixer", "status": "completed"}],
-            "live_log": state.pop("live_log", []),
+            "live_log": [],
         }
 
 
