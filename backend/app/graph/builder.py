@@ -73,18 +73,25 @@ def wrap_agent_with_queue(node_name, agent_func):
 
 
 def approval_gate(state: ProjectState) -> dict:
-    """Approval gate for human-in-the-loop validation of requirements & architecture."""
+    """Approval gate for human-in-the-loop validation of requirements & architecture.
+
+    NOTE: The graph is compiled with interrupt_before=["approval_gate", ...], so this
+    node's body only executes *after* the human's decision has already been written to
+    state via graph.aupdate_state(). It must NOT overwrite approval_granted, or it will
+    wipe out the user's "Approve & Proceed" choice and loop back to "pm" forever.
+    """
     return {
         "current_agent": "ApprovalGate",
-        "approval_granted": False
     }
 
 
 def database_approval_gate(state: ProjectState) -> dict:
-    """Approval gate for human-in-the-loop validation of database schema."""
+    """Approval gate for human-in-the-loop validation of database schema.
+
+    Same rule as approval_gate() above: do not reset approval_granted here.
+    """
     return {
         "current_agent": "DatabaseDesigner",
-        "approval_granted": False
     }
 
 
