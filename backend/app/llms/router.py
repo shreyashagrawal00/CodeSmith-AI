@@ -14,6 +14,7 @@ from typing import Optional
 from app.llms.gemini import get_gemini_llm
 from app.llms.groq import get_groq_llm
 from app.llms.mistral import get_mistral_llm
+from app.llms.openrouter import get_openrouter_llm
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +42,19 @@ _FACTORIES = {
     "gemini": get_gemini_llm,
     "groq": get_groq_llm,
     "mistral": get_mistral_llm,
+    "openrouter": get_openrouter_llm,
 }
 
 # Fallback chain per provider: if primary fails, try these in order.
+# OpenRouter is appended to every chain as the universal last resort —
+# it's a separate account/quota from Groq, Gemini, and Mistral, so if all
+# three primary providers are rate-limited or down at once, every agent
+# still has somewhere to go.
 _FALLBACKS: dict[str, list[str]] = {
-    "gemini": ["groq", "mistral"],
-    "groq": ["gemini", "mistral"],
-    "mistral": ["gemini", "groq"],
+    "gemini": ["groq", "mistral", "openrouter"],
+    "groq": ["gemini", "mistral", "openrouter"],
+    "mistral": ["gemini", "groq", "openrouter"],
+    "openrouter": ["groq", "gemini", "mistral"],
 }
 
 
@@ -59,7 +66,7 @@ class LLMRouter:
         """Return an LLM instance for *provider*.
 
         Args:
-            provider: One of ``"gemini"``, ``"groq"``, or ``"mistral"``.
+            provider: One of ``"gemini"``, ``"groq"``, ``"mistral"``, or ``"openrouter"``.
 
         Raises:
             ValueError: If the provider name is unknown.
