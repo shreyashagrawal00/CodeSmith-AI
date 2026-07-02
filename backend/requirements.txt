@@ -9,3 +9,8 @@ langchain-mistralai
 python-dotenv
 pydantic
 typing_extensions
+sqlalchemy
+aiofiles
+python-multipart
+websockets
+httpx
