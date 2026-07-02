@@ -35,16 +35,79 @@ def write_project_files(job_id: str, state: dict):
     # Frontend files
     fe_dir = project_dir / "frontend"
     fe_dir.mkdir(exist_ok=True)
+    src_dir = fe_dir / "src"
+    src_dir.mkdir(exist_ok=True)
+
     if frontend_code.get("main_app_code"):
-        (fe_dir / "App.jsx").write_text(frontend_code["main_app_code"], encoding="utf-8")
+        (src_dir / "App.jsx").write_text(frontend_code["main_app_code"], encoding="utf-8")
     if frontend_code.get("api_client_code"):
-        (fe_dir / "api.js").write_text(frontend_code["api_client_code"], encoding="utf-8")
+        (src_dir / "api.js").write_text(frontend_code["api_client_code"], encoding="utf-8")
     if frontend_code.get("package_json"):
         (fe_dir / "package.json").write_text(frontend_code["package_json"], encoding="utf-8")
     if frontend_code.get("dockerfile"):
         (fe_dir / "Dockerfile").write_text(frontend_code["dockerfile"], encoding="utf-8")
     if frontend_code.get("styles_code"):
-        (fe_dir / "index.css").write_text(frontend_code["styles_code"], encoding="utf-8")
+        (src_dir / "index.css").write_text(frontend_code["styles_code"], encoding="utf-8")
+
+    # Individual React components (previously silently dropped — the AI
+    # returns these as a filename -> code map, but nothing wrote them out).
+    components_code = frontend_code.get("components_code") or {}
+    if components_code:
+        components_dir = src_dir / "components"
+        components_dir.mkdir(exist_ok=True)
+        for filename, code in components_code.items():
+            if not code:
+                continue
+            # Guard against path traversal / nested paths in filenames.
+            safe_name = Path(filename).name or "component.jsx"
+            (components_dir / safe_name).write_text(code, encoding="utf-8")
+
+    # Static Vite boilerplate: the LLM-generated FrontendCode schema only
+    # produces App.jsx/api.js/styles/package.json — it never produces an
+    # index.html or a main.jsx entry point, so `npm run dev` has nothing to
+    # actually serve. These two files are effectively identical for any
+    # Vite + React app, so we write them directly rather than depending on
+    # the model to generate boilerplate correctly every time.
+    if frontend_code.get("main_app_code") and not (fe_dir / "index.html").exists():
+        (fe_dir / "index.html").write_text(
+            '<!doctype html>\n'
+            '<html lang="en">\n'
+            '  <head>\n'
+            '    <meta charset="UTF-8" />\n'
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
+            '    <title>CodeSmith AI Generated App</title>\n'
+            '  </head>\n'
+            '  <body>\n'
+            '    <div id="root"></div>\n'
+            '    <script type="module" src="/src/main.jsx"></script>\n'
+            '  </body>\n'
+            '</html>\n',
+            encoding="utf-8",
+        )
+    if frontend_code.get("main_app_code") and not (src_dir / "main.jsx").exists():
+        has_css = bool(frontend_code.get("styles_code"))
+        (src_dir / "main.jsx").write_text(
+            "import React from 'react';\n"
+            "import ReactDOM from 'react-dom/client';\n"
+            "import App from './App.jsx';\n"
+            + ("import './index.css';\n" if has_css else "")
+            + "\n"
+            "ReactDOM.createRoot(document.getElementById('root')).render(\n"
+            "  <React.StrictMode>\n"
+            "    <App />\n"
+            "  </React.StrictMode>\n"
+            ");\n",
+            encoding="utf-8",
+        )
+    if frontend_code.get("main_app_code") and not (fe_dir / "vite.config.js").exists():
+        (fe_dir / "vite.config.js").write_text(
+            "import { defineConfig } from 'vite';\n"
+            "import react from '@vitejs/plugin-react';\n\n"
+            "export default defineConfig({\n"
+            "  plugins: [react()],\n"
+            "});\n",
+            encoding="utf-8",
+        )
 
     # Database migration
     db_dir = project_dir / "database"

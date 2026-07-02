@@ -72,9 +72,19 @@ class BaseLLMAgent(BaseAgent):
                 # Pydantic schema check
                 validate_output(data, schema)
 
-                # Empty field check (strings only + critical lists)
+                # Empty field check (strings only + critical lists).
+                # A field is only flagged as "empty" if the schema doesn't
+                # already allow "" as a legitimate default (e.g.
+                # TestingReport.frontend_tests_code is optional and blank
+                # for backend-only projects — that's a valid response, not
+                # a failure).
+                model_fields = schema.model_fields
                 for field, val in data.items():
-                    if val is None or val == "":
+                    field_info = model_fields.get(field)
+                    allows_blank_string = (
+                        field_info is not None and field_info.default == ""
+                    )
+                    if val is None or (val == "" and not allows_blank_string):
                         raise ValueError(f"Required field '{field}' is empty.")
                     if field in ("features", "tech_stack", "components", "tables") \
                             and isinstance(val, list) and len(val) == 0:
