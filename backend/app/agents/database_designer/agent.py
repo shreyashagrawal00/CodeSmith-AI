@@ -13,9 +13,7 @@ class DatabaseDesignerAgent(BaseLLMAgent):
     def run(self, state: ProjectState) -> dict:
         arch = state["architecture"]
         self._emit(state, "info", "🗄️ Designing database schema", f"{len(arch.get('components', []))} components to model")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=DATABASE_PROMPT,
             schema=DatabaseSchema,
             inputs={

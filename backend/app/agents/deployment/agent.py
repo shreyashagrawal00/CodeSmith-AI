@@ -15,9 +15,7 @@ class DeploymentAgent(BaseLLMAgent):
         arch = state.get("architecture", {})
         db = state.get("database_schema", {})
         self._emit(state, "info", "🚀 Generating deployment config", "Docker Compose, NGINX, CI/CD, .env")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=DEPLOYMENT_PROMPT,
             schema=DeploymentConfig,
             inputs={

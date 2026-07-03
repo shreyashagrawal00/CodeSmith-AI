@@ -12,9 +12,7 @@ class PMAgent(BaseLLMAgent):
 
     def run(self, state: ProjectState) -> dict:
         self._emit(state, "info", "📋 Starting requirements analysis", state.get("user_prompt", "")[:80])
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=PM_PROMPT,
             schema=PMOutput,
             inputs={"user_prompt": state["user_prompt"]},

@@ -14,9 +14,7 @@ class BackendAgent(BaseLLMAgent):
         arch = state["architecture"]
         db = state["database_schema"]
         self._emit(state, "info", "⚙️ Generating backend code", f"Framework: {', '.join(arch.get('tech_stack', []))[:60]}")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=BACKEND_PROMPT,
             schema=BackendCode,
             inputs={

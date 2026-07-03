@@ -15,9 +15,7 @@ class BugfixAgent(BaseLLMAgent):
         security = state.get("security_report", {})
         total_issues = len(review.get("backend_issues", [])) + len(review.get("frontend_issues", [])) + len(security.get("vulnerabilities", []))
         self._emit(state, "info", "🐛 Applying bug fixes", f"{total_issues} issues to patch")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=BUGFIX_PROMPT,
             schema=BugfixReport,
             inputs={

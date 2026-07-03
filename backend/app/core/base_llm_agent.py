@@ -52,6 +52,20 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return "429" in text or "rate-limit" in text or "rate limit" in text or "too many requests" in text
 
 
+def _friendly_provider_name(llm) -> str:
+    """Human-readable provider name for live-log display.
+
+    OpenRouter is implemented with langchain_openai.ChatOpenAI (it's just
+    OpenAI-API-compatible), so a naive class-name lookup mislabels it as
+    "OpenAI" in the logs — which is actively misleading, since we never
+    configure a real OpenAI key here. Detect it via the base_url instead.
+    """
+    base_url = str(getattr(llm, "openai_api_base", "") or "")
+    if "openrouter" in base_url.lower():
+        return "OpenRouter"
+    return type(llm).__name__.replace("Chat", "").replace("GoogleGenerativeAI", "Gemini")
+
+
 class BaseLLMAgent(BaseAgent):
     """Base class for all LLM-powered agents."""
 
@@ -89,7 +103,7 @@ class BaseLLMAgent(BaseAgent):
         """
         last_exc = None
         for idx, llm in enumerate(self.llms):
-            provider_name = type(llm).__name__.replace("Chat", "").replace("GoogleGenerativeAI", "Gemini")
+            provider_name = _friendly_provider_name(llm)
 
             for rate_limit_attempt in range(2):  # 1 initial try + 1 retry-after-wait try
                 try:

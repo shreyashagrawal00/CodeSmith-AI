@@ -14,9 +14,7 @@ class DocAgent(BaseLLMAgent):
         req = state.get("requirements", {})
         arch = state.get("architecture", {})
         self._emit(state, "info", "📝 Writing documentation", f"README, API docs, architecture guide, setup guide")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=DOCUMENTATION_PROMPT,
             schema=Documentation,
             inputs={

@@ -12,9 +12,7 @@ class ReviewerAgent(BaseLLMAgent):
 
     def run(self, state: ProjectState) -> dict:
         self._emit(state, "info", "🔍 Reviewing code quality", "Checking backend + frontend")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=REVIEW_PROMPT,
             schema=ReviewReport,
             inputs={

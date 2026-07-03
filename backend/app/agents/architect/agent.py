@@ -13,9 +13,7 @@ class ArchitectAgent(BaseLLMAgent):
     def run(self, state: ProjectState) -> dict:
         req = state["requirements"]
         self._emit(state, "info", "🏗️ Designing system architecture", req.get("project_name", ""))
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=ARCHITECT_PROMPT,
             schema=ArchitectOutput,
             inputs={

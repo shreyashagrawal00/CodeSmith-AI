@@ -13,9 +13,7 @@ class TestingAgent(BaseLLMAgent):
     def run(self, state: ProjectState) -> dict:
         arch = state.get("architecture", {})
         self._emit(state, "info", "🧪 Generating test suite", "Unit tests + integration tests")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=TESTING_PROMPT,
             schema=TestingReport,
             inputs={

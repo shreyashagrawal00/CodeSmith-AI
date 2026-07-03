@@ -12,9 +12,7 @@ class SecurityAgent(BaseLLMAgent):
 
     def run(self, state: ProjectState) -> dict:
         self._emit(state, "info", "🔒 Running security audit", "OWASP checklist, SQL injection, JWT, XSS")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=SECURITY_PROMPT,
             schema=SecurityReport,
             inputs={

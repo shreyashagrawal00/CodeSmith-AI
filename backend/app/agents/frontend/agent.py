@@ -14,9 +14,7 @@ class FrontendAgent(BaseLLMAgent):
         arch = state["architecture"]
         req = state["requirements"]
         self._emit(state, "info", "🎨 Generating frontend UI", f"{len(req.get('features', []))} features to implement")
-        response = self.retry(
-            self.invoke,
-            retries=3, backoff=1.0,
+        response = self.invoke(
             prompt=FRONTEND_PROMPT,
             schema=FrontendCode,
             inputs={
