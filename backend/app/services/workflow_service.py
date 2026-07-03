@@ -44,7 +44,17 @@ def get_job(job_id: str) -> dict | None:
 
 
 async def run_workflow(job_id: str):
-    """Run the LangGraph pipeline from start until it hits an interrupt or completes."""
+    """Run the LangGraph pipeline from start until it hits an interrupt or completes.
+
+    Uses astream(..., stream_mode="values") instead of a single ainvoke() call.
+    ainvoke() only returns once the ENTIRE segment finishes (e.g. PM AND
+    Architect both complete before the approval_gate interrupt) — until then,
+    _jobs[job_id] (the dict the websocket polls) never changes, so the UI
+    looks completely frozen ("0 events") even while agents are actively
+    working. Streaming yields the accumulated state after every node
+    finishes, so we can update _jobs[job_id] — and therefore what the
+    websocket sees — incrementally, agent by agent.
+    """
     job = _jobs.get(job_id)
     if job is None:
         return
@@ -76,21 +86,24 @@ async def run_workflow(job_id: str):
         }
 
         config = {"configurable": {"thread_id": job_id}}
-        result = await graph.ainvoke(initial_state, config=config)
+
+        async for state_chunk in graph.astream(initial_state, config=config, stream_mode="values"):
+            # Merge in whatever has completed so far — the websocket loop
+            # picks this up on its next 0.5s poll.
+            _jobs[job_id].update(state_chunk)
 
         # Check if the graph is paused at an interrupt or has finished
         state = await graph.aget_state(config)
-        _jobs[job_id].update(result)
 
         if not state.next:
             # Finished completely
             _jobs[job_id]["status"] = "completed"
-            
+
             # Post-completion tasks
             from app.services.project_service import write_project_files
             from app.services.report_service import zip_project
             from app.services.preview_service import start_preview
-            
+
             project_dir = write_project_files(job_id, _jobs[job_id])
             zip_project(job_id)
             preview_res = start_preview(job_id, project_dir)
@@ -110,7 +123,10 @@ async def run_workflow(job_id: str):
 
 
 async def resume_workflow(job_id: str, approved: bool, feedback: str):
-    """Resume the paused LangGraph pipeline with user feedback and approval status."""
+    """Resume the paused LangGraph pipeline with user feedback and approval status.
+
+    Same streaming fix as run_workflow() — see docstring there.
+    """
     job = _jobs.get(job_id)
     if job is None:
         return
@@ -131,22 +147,23 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         # Update local job status back to running for the UI
         _jobs[job_id]["status"] = "running"
 
-        # 2. Resume execution (passing None tells LangGraph to continue from checkpoint)
-        result = await graph.ainvoke(None, config=config)
+        # 2. Resume execution (passing None tells LangGraph to continue from
+        #    checkpoint), streaming node-by-node so progress is visible live.
+        async for state_chunk in graph.astream(None, config=config, stream_mode="values"):
+            _jobs[job_id].update(state_chunk)
 
         # Check if the graph is paused at another interrupt or has finished
         state = await graph.aget_state(config)
-        _jobs[job_id].update(result)
 
         if not state.next:
             # Finished completely
             _jobs[job_id]["status"] = "completed"
-            
+
             # Post-completion tasks
             from app.services.project_service import write_project_files
             from app.services.report_service import zip_project
             from app.services.preview_service import start_preview
-            
+
             project_dir = write_project_files(job_id, _jobs[job_id])
             zip_project(job_id)
             preview_res = start_preview(job_id, project_dir)

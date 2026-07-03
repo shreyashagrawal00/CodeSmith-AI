@@ -8,6 +8,7 @@ Rules enforced here:
 from abc import abstractmethod
 from typing import Type, List
 import logging
+import re
 import time
 
 from pydantic import BaseModel
@@ -16,6 +17,39 @@ from app.core.base_agent import BaseAgent
 from app.guardrails.validators import validate_output
 
 logger = logging.getLogger(__name__)
+
+# Cap how long we'll ever sleep for a single rate-limit retry, even if a
+# provider asks for longer — we'd rather fall through to the next provider
+# in the chain than block the whole workflow for minutes.
+_MAX_RATE_LIMIT_WAIT_SECS = 45
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Best-effort extraction of a suggested wait time from a provider error.
+
+    Providers surface this differently — OpenRouter/Groq/Mistral errors may
+    include an HTTP ``Retry-After`` header, or (as with OpenRouter) embed a
+    ``retry_after_seconds`` field in the JSON error body. We don't have a
+    single typed exception across providers here, so we fall back to
+    string-matching the error text, which is what's actually available.
+    """
+    text = str(exc)
+    for pattern in (
+        r"retry_after_seconds['\"]?\s*[:=]\s*([\d.]+)",
+        r"Retry-After['\"]?\s*[:=]\s*([\d.]+)",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                pass
+    return None
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "429" in text or "rate-limit" in text or "rate limit" in text or "too many requests" in text
 
 
 class BaseLLMAgent(BaseAgent):
@@ -48,69 +82,92 @@ class BaseLLMAgent(BaseAgent):
         """Execute the prompt chain across the fallback LLM chain.
 
         Validates against guardrails and emits live log events into state.
+        Each provider gets one immediate attempt, and — if it fails with a
+        rate-limit (429) error that includes a suggested wait time — one
+        additional attempt after actually waiting that long, before moving
+        on to the next provider in the chain.
         """
         last_exc = None
         for idx, llm in enumerate(self.llms):
             provider_name = type(llm).__name__.replace("Chat", "").replace("GoogleGenerativeAI", "Gemini")
-            try:
-                if state is not None:
-                    self._emit(state, "info",
-                               f"🤖 Calling {provider_name}",
-                               f"attempt {idx + 1}/{len(self.llms)}")
 
-                t0 = time.time()
-                structured_llm = llm.with_structured_output(schema)
-                chain = prompt | structured_llm
-                response = chain.invoke(inputs)
-                elapsed = round(time.time() - t0, 1)
+            for rate_limit_attempt in range(2):  # 1 initial try + 1 retry-after-wait try
+                try:
+                    if state is not None:
+                        self._emit(state, "info",
+                                   f"🤖 Calling {provider_name}",
+                                   f"attempt {idx + 1}/{len(self.llms)}")
 
-                if response is None:
-                    raise ValueError(f"Received empty response from {provider_name}")
+                    t0 = time.time()
+                    structured_llm = llm.with_structured_output(schema)
+                    chain = prompt | structured_llm
+                    response = chain.invoke(inputs)
+                    elapsed = round(time.time() - t0, 1)
 
-                data = response.model_dump()
+                    if response is None:
+                        raise ValueError(f"Received empty response from {provider_name}")
 
-                # Pydantic schema check
-                validate_output(data, schema)
+                    data = response.model_dump()
 
-                # Empty field check (strings only + critical lists).
-                # A field is only flagged as "empty" if the schema doesn't
-                # already allow "" as a legitimate default (e.g.
-                # TestingReport.frontend_tests_code is optional and blank
-                # for backend-only projects — that's a valid response, not
-                # a failure).
-                model_fields = schema.model_fields
-                for field, val in data.items():
-                    field_info = model_fields.get(field)
-                    allows_blank_string = (
-                        field_info is not None and field_info.default == ""
-                    )
-                    if val is None or (val == "" and not allows_blank_string):
-                        raise ValueError(f"Required field '{field}' is empty.")
-                    if field in ("features", "tech_stack", "components", "tables") \
-                            and isinstance(val, list) and len(val) == 0:
-                        raise ValueError(f"Collection field '{field}' must not be empty.")
+                    # Pydantic schema check
+                    validate_output(data, schema)
 
-                # Placeholder check
-                for field, val in data.items():
-                    if isinstance(val, str):
-                        v = val.lower()
-                        if "[placeholder]" in v or "todo:" in v or "fixme:" in v or "<insert" in v:
-                            raise ValueError(f"Field '{field}' has unresolved placeholder.")
+                    # Empty field check (strings only + critical lists).
+                    # A field is only flagged as "empty" if the schema doesn't
+                    # already allow "" as a legitimate default (e.g.
+                    # TestingReport.frontend_tests_code is optional and blank
+                    # for backend-only projects — that's a valid response, not
+                    # a failure).
+                    model_fields = schema.model_fields
+                    for field, val in data.items():
+                        field_info = model_fields.get(field)
+                        allows_blank_string = (
+                            field_info is not None and field_info.default == ""
+                        )
+                        if val is None or (val == "" and not allows_blank_string):
+                            raise ValueError(f"Required field '{field}' is empty.")
+                        if field in ("features", "tech_stack", "components", "tables") \
+                                and isinstance(val, list) and len(val) == 0:
+                            raise ValueError(f"Collection field '{field}' must not be empty.")
 
-                if state is not None:
-                    self._emit(state, "success",
-                               f"✅ {provider_name} responded in {elapsed}s",
-                               f"guardrails passed")
-                logger.info("Guardrails passed for %s via %s", self.name, provider_name)
-                return response
+                    # Placeholder check
+                    for field, val in data.items():
+                        if isinstance(val, str):
+                            v = val.lower()
+                            if "[placeholder]" in v or "todo:" in v or "fixme:" in v or "<insert" in v:
+                                raise ValueError(f"Field '{field}' has unresolved placeholder.")
 
-            except Exception as e:
-                if state is not None:
-                    self._emit(state, "warning",
-                               f"⚠️ {provider_name} failed",
-                               str(e)[:120])
-                logger.warning("Provider %s failed for %s: %s", provider_name, self.name, e)
-                last_exc = e
+                    if state is not None:
+                        self._emit(state, "success",
+                                   f"✅ {provider_name} responded in {elapsed}s",
+                                   f"guardrails passed")
+                    logger.info("Guardrails passed for %s via %s", self.name, provider_name)
+                    return response
+
+                except Exception as e:
+                    last_exc = e
+
+                    if rate_limit_attempt == 0 and _is_rate_limit_error(e):
+                        wait_secs = _extract_retry_after_seconds(e)
+                        if wait_secs is not None:
+                            wait_secs = min(wait_secs, _MAX_RATE_LIMIT_WAIT_SECS)
+                            if state is not None:
+                                self._emit(state, "warning",
+                                           f"⏳ {provider_name} rate-limited",
+                                           f"waiting {wait_secs:.0f}s before retrying this provider")
+                            logger.warning(
+                                "%s rate-limited for %s, waiting %.0fs then retrying once",
+                                provider_name, self.name, wait_secs,
+                            )
+                            time.sleep(wait_secs)
+                            continue  # retry the same provider one more time
+
+                    if state is not None:
+                        self._emit(state, "warning",
+                                   f"⚠️ {provider_name} failed",
+                                   str(e)[:120])
+                    logger.warning("Provider %s failed for %s: %s", provider_name, self.name, e)
+                    break  # move on to the next provider in the chain
 
         if state is not None:
             self._emit(state, "error",
