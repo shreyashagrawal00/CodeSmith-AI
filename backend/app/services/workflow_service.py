@@ -4,8 +4,12 @@ from typing import Dict
 
 from app.graph.builder import graph
 from app.graph.state import ProjectState
+from app.database import crud
 
-# In-memory job store
+# In-memory job store -- fast path for jobs from the current backend
+# process. Every job is also persisted to SQLite (see app/database/) so
+# job history and status survive a backend restart; get_job() falls back
+# to the DB when a job_id isn't found here.
 _jobs: Dict[str, dict] = {}
 
 
@@ -36,11 +40,27 @@ def create_job(user_prompt: str) -> str:
         "quality_score": 0.0,
         "correction_iterations": 0,
     }
+    crud.create_project(job_id, user_prompt)
     return job_id
 
 
 def get_job(job_id: str) -> dict | None:
-    return _jobs.get(job_id)
+    job = _jobs.get(job_id)
+    if job is not None:
+        return job
+    # Not in this process's memory -- e.g. the backend restarted since this
+    # job ran. Fall back to what was persisted, and cache it so subsequent
+    # lookups (and the websocket's polling loop) don't keep hitting SQLite.
+    persisted = crud.get_project(job_id)
+    if persisted is not None:
+        _jobs[job_id] = persisted
+    return persisted
+
+
+def list_projects(limit: int = 50) -> list[dict]:
+    """Summaries of past projects for a 'My Projects' view -- survives
+    backend restarts since it reads from SQLite, not the in-memory dict."""
+    return crud.list_projects(limit=limit)
 
 
 async def run_workflow(job_id: str):
@@ -91,6 +111,7 @@ async def run_workflow(job_id: str):
             # Merge in whatever has completed so far — the websocket loop
             # picks this up on its next 0.5s poll.
             _jobs[job_id].update(state_chunk)
+            crud.update_project(job_id, _jobs[job_id])
 
         # Check if the graph is paused at an interrupt or has finished
         state = await graph.aget_state(config)
@@ -117,9 +138,12 @@ async def run_workflow(job_id: str):
             _jobs[job_id]["status"] = "paused"
             _jobs[job_id]["current_agent"] = state.next[0]
 
+        crud.update_project(job_id, _jobs[job_id])
+
     except Exception as e:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = str(e)
+        crud.update_project(job_id, _jobs[job_id])
 
 
 async def resume_workflow(job_id: str, approved: bool, feedback: str):
@@ -151,6 +175,7 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         #    checkpoint), streaming node-by-node so progress is visible live.
         async for state_chunk in graph.astream(None, config=config, stream_mode="values"):
             _jobs[job_id].update(state_chunk)
+            crud.update_project(job_id, _jobs[job_id])
 
         # Check if the graph is paused at another interrupt or has finished
         state = await graph.aget_state(config)
@@ -177,6 +202,9 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
             _jobs[job_id]["status"] = "paused"
             _jobs[job_id]["current_agent"] = state.next[0]
 
+        crud.update_project(job_id, _jobs[job_id])
+
     except Exception as e:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = str(e)
+        crud.update_project(job_id, _jobs[job_id])

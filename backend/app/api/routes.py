@@ -1,13 +1,8 @@
-import asyncio
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow
-from app.services.project_service import write_project_files
-from app.services.report_service import zip_project
-
-from app.services.preview_service import start_preview
+from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow, list_projects
 
 router = APIRouter()
 
@@ -28,28 +23,8 @@ async def generate_project(request: ProjectRequest, background_tasks: Background
     Returns a job_id to track progress.
     """
     job_id = create_job(request.prompt)
-    background_tasks.add_task(_run_and_save, job_id)
+    background_tasks.add_task(run_workflow, job_id)
     return {"job_id": job_id, "status": "running", "message": "CodeSmith AI is building your project..."}
-
-
-async def _run_and_save(job_id: str):
-    """Background task: run the graph, write files, and zip the result."""
-    await run_workflow(job_id)
-    job = get_job(job_id)
-    if job and job.get("status") == "completed":
-        try:
-            project_dir = write_project_files(job_id, job)
-            zip_project(job_id)
-            # Start background live preview
-            preview_res = start_preview(job_id, project_dir)
-            if preview_res.get("success"):
-                job["preview"] = {
-                    "frontend_url": preview_res["frontend_url"],
-                    "backend_url": preview_res["backend_url"]
-                }
-        except Exception as e:
-            job["status"] = "failed"
-            job["error"] = f"File write or preview failed: {str(e)}"
 
 
 @router.get("/status/{job_id}")
@@ -103,3 +78,14 @@ async def download_project(job_id: str):
         media_type="application/zip",
         filename=f"codesmith_project_{job_id[:8]}.zip",
     )
+
+
+@router.get("/projects")
+async def get_projects(limit: int = 50):
+    """List past projects (persisted in SQLite), newest first.
+
+    This is what makes 'my old projects' survive a backend restart — the
+    in-memory job dict is wiped on restart, but this reads from
+    backend/codesmith.db instead.
+    """
+    return {"projects": list_projects(limit=limit)}

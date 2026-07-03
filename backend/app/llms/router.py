@@ -15,12 +15,15 @@ from app.llms.gemini import get_gemini_llm
 from app.llms.groq import get_groq_llm
 from app.llms.mistral import get_mistral_llm
 from app.llms.openrouter import get_openrouter_llm
+from app.llms.cerebras import get_cerebras_llm
 
 logger = logging.getLogger(__name__)
 
 # Agent-to-provider routing table.
 # Groq is the default primary for speed & free-tier quota preservation.
-# Gemini free-tier has only 20 requests/day, so it is used as a fallback.
+# Gemini's free tier (~1,500 req/day) was getting exhausted quickly, so it
+# has been demoted to a last-resort backup — Cerebras (~1M tokens/day free)
+# now fills the "fast free tier" fallback role Gemini used to have.
 AGENT_PROVIDER_MAP: dict[str, str] = {
     # Creative reasoning / PM / Architecture
     "pm": "groq",
@@ -43,18 +46,21 @@ _FACTORIES = {
     "groq": get_groq_llm,
     "mistral": get_mistral_llm,
     "openrouter": get_openrouter_llm,
+    "cerebras": get_cerebras_llm,
 }
 
 # Fallback chain per provider: if primary fails, try these in order.
-# OpenRouter is appended to every chain as the universal last resort —
-# it's a separate account/quota from Groq, Gemini, and Mistral, so if all
-# three primary providers are rate-limited or down at once, every agent
-# still has somewhere to go.
+# OpenRouter is appended near the end of every chain as a universal
+# fallback — it's a separate account/quota from the others, so if the
+# named providers are all rate-limited or down at once, every agent still
+# has somewhere to go. Gemini sits LAST in every chain — it's now purely a
+# backup of last resort, since its free-tier quota exhausts quickly.
 _FALLBACKS: dict[str, list[str]] = {
-    "gemini": ["groq", "mistral", "openrouter"],
-    "groq": ["gemini", "mistral", "openrouter"],
-    "mistral": ["gemini", "groq", "openrouter"],
-    "openrouter": ["groq", "gemini", "mistral"],
+    "cerebras": ["groq", "mistral", "openrouter", "gemini"],
+    "groq": ["cerebras", "mistral", "openrouter", "gemini"],
+    "mistral": ["cerebras", "groq", "openrouter", "gemini"],
+    "openrouter": ["groq", "cerebras", "mistral", "gemini"],
+    "gemini": ["groq", "cerebras", "mistral", "openrouter"],
 }
 
 
@@ -66,7 +72,7 @@ class LLMRouter:
         """Return an LLM instance for *provider*.
 
         Args:
-            provider: One of ``"gemini"``, ``"groq"``, ``"mistral"``, or ``"openrouter"``.
+            provider: One of ``"gemini"``, ``"groq"``, ``"mistral"``, ``"openrouter"``, or ``"cerebras"``.
 
         Raises:
             ValueError: If the provider name is unknown.

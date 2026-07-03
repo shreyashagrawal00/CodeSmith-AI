@@ -9,6 +9,7 @@ class Settings:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+    CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 
 
 settings = Settings()
