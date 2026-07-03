@@ -6,10 +6,14 @@ from app.config import settings
 # same pattern as OpenRouter (see app/llms/openrouter.py).
 CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
 
-# Cerebras' free tier includes Llama 3.3 70B at very high daily token
-# volume. Check https://cloud.cerebras.ai for the current model roster if
+# Cerebras' free tier includes Llama 3.1 70B at very high daily token
+# volume. Model IDs on Cerebras use no dot/hyphen between "llama" and the
+# version (e.g. "llama3.1-70b", NOT "llama-3.1-70b" or "llama-3.3-70b" --
+# that guessed format was returning 404 "model not found"). Check
+# https://inference-docs.cerebras.ai/models/overview or the account
+# dashboard at https://cloud.cerebras.ai for the current model roster if
 # this one is ever retired.
-DEFAULT_CEREBRAS_MODEL = "llama-3.3-70b"
+DEFAULT_CEREBRAS_MODEL = "llama3.1-70b"
 
 
 def get_cerebras_llm(

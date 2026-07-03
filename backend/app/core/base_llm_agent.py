@@ -55,14 +55,17 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 def _friendly_provider_name(llm) -> str:
     """Human-readable provider name for live-log display.
 
-    OpenRouter is implemented with langchain_openai.ChatOpenAI (it's just
-    OpenAI-API-compatible), so a naive class-name lookup mislabels it as
-    "OpenAI" in the logs — which is actively misleading, since we never
-    configure a real OpenAI key here. Detect it via the base_url instead.
+    OpenRouter and Cerebras are both implemented with
+    langchain_openai.ChatOpenAI (they're just OpenAI-API-compatible), so a
+    naive class-name lookup mislabels either of them as "OpenAI" in the
+    logs -- which is actively misleading, since we never configure a real
+    OpenAI key here. Detect the actual provider via the base_url instead.
     """
-    base_url = str(getattr(llm, "openai_api_base", "") or "")
-    if "openrouter" in base_url.lower():
+    base_url = str(getattr(llm, "openai_api_base", "") or "").lower()
+    if "openrouter" in base_url:
         return "OpenRouter"
+    if "cerebras" in base_url:
+        return "Cerebras"
     return type(llm).__name__.replace("Chat", "").replace("GoogleGenerativeAI", "Gemini")
 
 
