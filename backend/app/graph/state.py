@@ -58,6 +58,11 @@ class ProjectState(TypedDict):
     quality_score: float
     correction_iterations: int
 
+    # Agents the user has chosen to skip via the "Skip this agent" button.
+    # Plain field, overwritten wholesale by workflow_service's injection
+    # logic between graph steps -- not written to by the nodes themselves.
+    skip_agents: list
+
     # Reducer to automatically merge/append logs from parallel executing agents
     log: Annotated[list, operator.add]
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow, list_projects
+from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow, list_projects, request_skip
 
 router = APIRouter()
 
@@ -14,6 +14,10 @@ class ProjectRequest(BaseModel):
 class ApprovalRequest(BaseModel):
     approved: bool
     feedback: str = ""
+
+
+class SkipRequest(BaseModel):
+    agent: str
 
 
 @router.post("/generate")
@@ -78,6 +82,25 @@ async def download_project(job_id: str):
         media_type="application/zip",
         filename=f"codesmith_project_{job_id[:8]}.zip",
     )
+
+
+@router.post("/skip/{job_id}")
+async def skip_agent(job_id: str, request: SkipRequest):
+    """Mark an upcoming agent to be skipped for this job.
+
+    Valid agent ids: PM, Architect, DatabaseDesigner, BackendEngineer,
+    FrontendEngineer, Reviewer, SecurityExpert, QAEngineer, BugFixer,
+    TechWriter, DevOps -- these match the ids used by the frontend's
+    orchestration grid and the "agent" field in job.log entries.
+
+    The skipped agent won't call any LLM -- it emits a "skipped by user"
+    log entry and leaves its output section empty, so it can't retroactively
+    un-skip an agent that already ran.
+    """
+    ok = request_skip(job_id, request.agent)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "ok", "message": f"{request.agent} will be skipped when reached."}
 
 
 @router.get("/projects")

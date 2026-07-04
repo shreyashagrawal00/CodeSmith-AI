@@ -17,6 +17,22 @@ export default function App() {
   const [feedback, setFeedback] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
 
+  const handleSkip = async (agentId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/skip/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent: agentId }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.detail || `Failed to skip ${agentId}.`);
+      }
+    } catch {
+      setError(`Failed to connect to backend to skip ${agentId}.`);
+    }
+  };
+
   const handleApproval = async (approved) => {
     setSubmitLoading(true);
     setError(null);
@@ -206,7 +222,7 @@ export default function App() {
 
         {status !== "idle" && (
           <>
-            <ProgressBar currentAgent={currentAgent} log={log} status={status} />
+            <ProgressBar currentAgent={currentAgent} log={log} status={status} jobId={jobId} onSkip={handleSkip} />
             
             {status === "paused" && (
               <div className="w-full max-w-2xl p-6 bg-slate-900/40 border border-indigo-500/30 rounded-2xl space-y-4 shadow-lg shadow-indigo-500/5 animate-fade-in relative z-10">

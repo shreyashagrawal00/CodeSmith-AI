@@ -89,6 +89,33 @@ class BaseLLMAgent(BaseAgent):
         state["live_log"].append(entry)
         logger.info("[%s] %s — %s", self.name, message, detail)
 
+    def skip_check(self, state: dict, agent_id: str) -> dict | None:
+        """Check whether the user requested this agent be skipped.
+
+        agent_id must match the id used by the frontend's orchestration
+        grid and the "agent" field in job.log entries (e.g. "PM",
+        "Architect", "DatabaseDesigner", ...) -- see
+        frontend/src/components/ProgressBar.jsx's AGENT_ROLES.
+
+        Returns a ready-to-return state update dict if skipped (caller
+        should return it immediately without calling any LLM), or None if
+        the agent should run normally. The skipped section's output key is
+        deliberately left untouched -- it stays at its existing default
+        ({}), and downstream agents already treat missing/empty sections
+        defensively via .get(..., default).
+        """
+        if agent_id in (state.get("skip_agents") or []):
+            self._emit(state, "warning",
+                       f"⏭️ {agent_id} skipped by user",
+                       "no LLM call made for this step")
+            logger.info("%s skipped by user request", agent_id)
+            return {
+                "current_agent": agent_id,
+                "log": [{"agent": agent_id, "status": "skipped"}],
+                "live_log": [],
+            }
+        return None
+
     def invoke(
         self,
         prompt,
