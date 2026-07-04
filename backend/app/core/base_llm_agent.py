@@ -99,6 +99,15 @@ class BaseLLMAgent(BaseAgent):
         "Architect", "DatabaseDesigner", ...) -- see
         frontend/src/components/ProgressBar.jsx's AGENT_ROLES.
 
+        IMPORTANT: this reads workflow_service._jobs[job_id] directly
+        (the live in-memory job dict), NOT state.get("skip_agents").
+        A continuous graph.astream() call does not re-check external
+        graph.aupdate_state() changes mid-run -- verified empirically: a
+        later node in the same astream() call still saw the pre-injection
+        value even after aupdate_state() completed between steps. Since
+        the whole app runs as a single process, reading the shared
+        in-memory dict directly is both simpler and actually correct.
+
         Returns a ready-to-return state update dict if skipped (caller
         should return it immediately without calling any LLM), or None if
         the agent should run normally. The skipped section's output key is
@@ -106,7 +115,18 @@ class BaseLLMAgent(BaseAgent):
         ({}), and downstream agents already treat missing/empty sections
         defensively via .get(..., default).
         """
-        if agent_id in (state.get("skip_agents") or []):
+        job_id = state.get("job_id")
+        skip_list: list = []
+        if job_id:
+            # Lazy import to avoid a circular import: workflow_service
+            # imports the graph (and therefore every agent, and therefore
+            # this module) at module load time.
+            from app.services.workflow_service import _jobs
+            job = _jobs.get(job_id)
+            if job:
+                skip_list = job.get("skip_agents") or []
+
+        if agent_id in skip_list:
             self._emit(state, "warning",
                        f"⏭️ {agent_id} skipped by user",
                        "no LLM call made for this step")

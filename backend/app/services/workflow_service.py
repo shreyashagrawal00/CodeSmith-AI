@@ -67,11 +67,12 @@ def list_projects(limit: int = 50) -> list[dict]:
 def request_skip(job_id: str, agent_id: str) -> bool:
     """Mark an agent to be skipped the next time it would run.
 
-    This only records the request in the in-memory job dict -- the actual
-    graph state gets updated between steps inside run_workflow/
-    resume_workflow's streaming loop (see _sync_skip_requests below), since
-    that's the only point where writing to the live LangGraph checkpoint is
-    safe (i.e. between supersteps, not concurrently with a node running).
+    This just records the request in the in-memory job dict (_jobs).
+    base_llm_agent.py's skip_check() reads this same dict directly at
+    call time -- see its docstring for why that's necessary rather than
+    routing this through LangGraph's state/checkpoint (aupdate_state()
+    does not propagate to a continuous astream() call already in
+    progress; verified empirically).
 
     Returns False if the job isn't known (caller should 404).
     """
@@ -82,18 +83,6 @@ def request_skip(job_id: str, agent_id: str) -> bool:
     skips.add(agent_id)
     job["skip_agents"] = list(skips)
     return True
-
-
-async def _sync_skip_requests(job_id: str, config: dict):
-    """Push any pending skip requests into the live graph checkpoint.
-
-    Called between astream() steps (i.e. after one agent finishes, before
-    the next one starts) so a skip request that arrived mid-run actually
-    reaches the graph before the targeted agent executes.
-    """
-    skips = _jobs[job_id].get("skip_agents") or []
-    if skips:
-        await graph.aupdate_state(config, {"skip_agents": skips})
 
 
 async def run_workflow(job_id: str):
@@ -115,6 +104,7 @@ async def run_workflow(job_id: str):
     try:
         initial_state: ProjectState = {
             "user_prompt": job["user_prompt"],
+            "job_id": job_id,
             "requirements": {},
             "architecture": {},
             "database_schema": {},
@@ -146,7 +136,6 @@ async def run_workflow(job_id: str):
             # picks this up on its next 0.5s poll.
             _jobs[job_id].update(state_chunk)
             crud.update_project(job_id, _jobs[job_id])
-            await _sync_skip_requests(job_id, config)
 
         # Check if the graph is paused at an interrupt or has finished
         state = await graph.aget_state(config)
@@ -211,7 +200,6 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         async for state_chunk in graph.astream(None, config=config, stream_mode="values"):
             _jobs[job_id].update(state_chunk)
             crud.update_project(job_id, _jobs[job_id])
-            await _sync_skip_requests(job_id, config)
 
         # Check if the graph is paused at another interrupt or has finished
         state = await graph.aget_state(config)

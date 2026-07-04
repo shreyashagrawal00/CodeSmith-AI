@@ -59,9 +59,15 @@ class ProjectState(TypedDict):
     correction_iterations: int
 
     # Agents the user has chosen to skip via the "Skip this agent" button.
-    # Plain field, overwritten wholesale by workflow_service's injection
-    # logic between graph steps -- not written to by the nodes themselves.
+    # NOTE: this is NOT read from here at decision time -- see
+    # core/base_llm_agent.py's skip_check() for why. Kept for visibility/
+    # debugging only (e.g. inspecting a checkpoint).
     skip_agents: list
+
+    # Needed so skip_check() can look up the live job dict in
+    # workflow_service._jobs by id -- set once at job creation and never
+    # mutated afterward, so it's safe to read from any state snapshot.
+    job_id: str
 
     # Reducer to automatically merge/append logs from parallel executing agents
     log: Annotated[list, operator.add]
