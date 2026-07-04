@@ -53,14 +53,14 @@ _FACTORIES = {
 # OpenRouter is appended near the end of every chain as a universal
 # fallback — it's a separate account/quota from the others, so if the
 # named providers are all rate-limited or down at once, every agent still
-# has somewhere to go. Gemini sits LAST in every chain — it's now purely a
-# backup of last resort, since its free-tier quota exhausts quickly.
+# has somewhere to go. Gemini now ranks ahead of Cerebras in every chain
+# (higher priority); Cerebras is the backup of the two.
 _FALLBACKS: dict[str, list[str]] = {
-    "cerebras": ["groq", "mistral", "openrouter", "gemini"],
-    "groq": ["cerebras", "mistral", "openrouter", "gemini"],
-    "mistral": ["cerebras", "groq", "openrouter", "gemini"],
-    "openrouter": ["groq", "cerebras", "mistral", "gemini"],
     "gemini": ["groq", "cerebras", "mistral", "openrouter"],
+    "groq": ["gemini", "cerebras", "mistral", "openrouter"],
+    "mistral": ["gemini", "cerebras", "groq", "openrouter"],
+    "openrouter": ["groq", "gemini", "cerebras", "mistral"],
+    "cerebras": ["groq", "gemini", "mistral", "openrouter"],
 }
 
 
