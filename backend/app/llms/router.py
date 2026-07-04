@@ -16,6 +16,7 @@ from app.llms.groq import get_groq_llm
 from app.llms.mistral import get_mistral_llm
 from app.llms.openrouter import get_openrouter_llm
 from app.llms.cerebras import get_cerebras_llm
+from app.llms.nvidia import get_nvidia_llm
 
 logger = logging.getLogger(__name__)
 
@@ -47,20 +48,25 @@ _FACTORIES = {
     "mistral": get_mistral_llm,
     "openrouter": get_openrouter_llm,
     "cerebras": get_cerebras_llm,
+    "nvidia": get_nvidia_llm,
 }
 
 # Fallback chain per provider: if primary fails, try these in order.
-# OpenRouter is appended near the end of every chain as a universal
-# fallback — it's a separate account/quota from the others, so if the
-# named providers are all rate-limited or down at once, every agent still
-# has somewhere to go. Gemini now ranks ahead of Cerebras in every chain
-# (higher priority); Cerebras is the backup of the two.
+# OpenRouter is a universal fallback near the end of every chain — it's a
+# separate account/quota from the others, so if the named providers are
+# all rate-limited or down at once, every agent still has somewhere to go.
+# Gemini ranks ahead of Cerebras in every chain (higher priority); Cerebras
+# is the backup of the two. NVIDIA NIM sits LAST in every chain, after
+# OpenRouter — it's a one-time credit pool rather than a daily-refilling
+# quota (see app/llms/nvidia.py), so it's held in reserve as the true
+# last-resort rather than burned through on routine fallbacks.
 _FALLBACKS: dict[str, list[str]] = {
-    "gemini": ["groq", "cerebras", "mistral", "openrouter"],
-    "groq": ["gemini", "cerebras", "mistral", "openrouter"],
-    "mistral": ["gemini", "cerebras", "groq", "openrouter"],
-    "openrouter": ["groq", "gemini", "cerebras", "mistral"],
-    "cerebras": ["groq", "gemini", "mistral", "openrouter"],
+    "gemini": ["groq", "cerebras", "mistral", "openrouter", "nvidia"],
+    "groq": ["gemini", "cerebras", "mistral", "openrouter", "nvidia"],
+    "mistral": ["gemini", "cerebras", "groq", "openrouter", "nvidia"],
+    "openrouter": ["groq", "gemini", "cerebras", "mistral", "nvidia"],
+    "cerebras": ["groq", "gemini", "mistral", "openrouter", "nvidia"],
+    "nvidia": ["groq", "gemini", "cerebras", "mistral", "openrouter"],
 }
 
 
@@ -72,7 +78,7 @@ class LLMRouter:
         """Return an LLM instance for *provider*.
 
         Args:
-            provider: One of ``"gemini"``, ``"groq"``, ``"mistral"``, ``"openrouter"``, or ``"cerebras"``.
+            provider: One of ``"gemini"``, ``"groq"``, ``"mistral"``, ``"openrouter"``, ``"cerebras"``, or ``"nvidia"``.
 
         Raises:
             ValueError: If the provider name is unknown.

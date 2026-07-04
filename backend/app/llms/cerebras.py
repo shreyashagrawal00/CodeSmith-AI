@@ -6,18 +6,21 @@ from app.config import settings
 # same pattern as OpenRouter (see app/llms/openrouter.py).
 CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
 
-# Cerebras' free tier includes Llama 3.1 70B at very high daily token
-# volume. Model IDs on Cerebras use no dot/hyphen between "llama" and the
-# version (e.g. "llama3.1-70b", NOT "llama-3.1-70b" or "llama-3.3-70b" --
-# that guessed format was returning 404 "model not found"). Check
-# https://inference-docs.cerebras.ai/models/overview or the account
-# dashboard at https://cloud.cerebras.ai for the current model roster if
-# this one is ever retired.
-DEFAULT_CEREBRAS_MODEL = "llama3.1-70b"
+# Cerebras has been rapidly deprecating models throughout 2026 (Llama 3.3
+# 70B deprecated Feb 2026; Llama 3.1 8B reportedly slated for deprecation
+# May 2026), which is why two earlier guesses here (llama-3.3-70b, then
+# llama3.1-70b) both 404'd on real accounts. gpt-oss-120b is the one model
+# that recent independent sources consistently list as current and NOT
+# scheduled for deprecation -- but model catalogs change fast, so don't
+# trust this blindly either. To get a guaranteed-correct, live answer for
+# your own account:
+#   curl https://api.cerebras.ai/v1/models -H "Authorization: Bearer $CEREBRAS_API_KEY"
+# or check https://inference-docs.cerebras.ai/models/overview directly.
+DEFAULT_CEREBRAS_MODEL = "gpt-oss-120b"
 
 
 def get_cerebras_llm(
-    model: str = DEFAULT_CEREBRAS_MODEL,
+    model: str | None = None,
     temperature: float = 0.2,
 ) -> ChatOpenAI:
     """Factory: create a Cerebras LLM instance on demand.
@@ -27,12 +30,17 @@ def get_cerebras_llm(
     daily ceiling than Gemini's free tier (~1,500 requests/day), which was
     getting exhausted quickly during normal use.
 
+    Model resolution order: explicit `model` argument > CEREBRAS_MODEL env
+    var (set this in .env if DEFAULT_CEREBRAS_MODEL ever 404s) > the
+    hardcoded default above.
+
     Using a factory instead of a module-level singleton means:
     - A missing API key only raises at call time, not at import time.
     - Each agent can request a different model/temperature if needed.
     """
+    resolved_model = model or settings.CEREBRAS_MODEL or DEFAULT_CEREBRAS_MODEL
     return ChatOpenAI(
-        model=model,
+        model=resolved_model,
         api_key=settings.CEREBRAS_API_KEY,
         base_url=CEREBRAS_BASE_URL,
         temperature=temperature,

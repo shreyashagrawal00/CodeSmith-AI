@@ -55,10 +55,10 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 def _friendly_provider_name(llm) -> str:
     """Human-readable provider name for live-log display.
 
-    OpenRouter and Cerebras are both implemented with
+    OpenRouter, Cerebras, and NVIDIA NIM are all implemented with
     langchain_openai.ChatOpenAI (they're just OpenAI-API-compatible), so a
-    naive class-name lookup mislabels either of them as "OpenAI" in the
-    logs -- which is actively misleading, since we never configure a real
+    naive class-name lookup mislabels any of them as "OpenAI" in the logs
+    -- which is actively misleading, since we never configure a real
     OpenAI key here. Detect the actual provider via the base_url instead.
     """
     base_url = str(getattr(llm, "openai_api_base", "") or "").lower()
@@ -66,6 +66,8 @@ def _friendly_provider_name(llm) -> str:
         return "OpenRouter"
     if "cerebras" in base_url:
         return "Cerebras"
+    if "nvidia" in base_url:
+        return "NVIDIA NIM"
     return type(llm).__name__.replace("Chat", "").replace("GoogleGenerativeAI", "Gemini")
 
 
