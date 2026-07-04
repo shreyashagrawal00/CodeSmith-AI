@@ -11,6 +11,9 @@ class TestingAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("testing"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "QAEngineer")
+        if skip_result is not None:
+            return skip_result
         arch = state.get("architecture", {})
         self._emit(state, "info", "🧪 Generating test suite", "Unit tests + integration tests")
         response = self.invoke(

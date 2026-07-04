@@ -11,6 +11,9 @@ class ReviewerAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("reviewer"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "Reviewer")
+        if skip_result is not None:
+            return skip_result
         self._emit(state, "info", "🔍 Reviewing code quality", "Checking backend + frontend")
         response = self.invoke(
             prompt=REVIEW_PROMPT,

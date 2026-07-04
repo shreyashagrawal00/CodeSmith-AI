@@ -11,6 +11,9 @@ class BackendAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("backend"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "BackendEngineer")
+        if skip_result is not None:
+            return skip_result
         arch = state["architecture"]
         db = state["database_schema"]
         self._emit(state, "info", "⚙️ Generating backend code", f"Framework: {', '.join(arch.get('tech_stack', []))[:60]}")

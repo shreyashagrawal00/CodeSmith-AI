@@ -11,6 +11,9 @@ class SecurityAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("security"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "SecurityExpert")
+        if skip_result is not None:
+            return skip_result
         self._emit(state, "info", "🔒 Running security audit", "OWASP checklist, SQL injection, JWT, XSS")
         response = self.invoke(
             prompt=SECURITY_PROMPT,

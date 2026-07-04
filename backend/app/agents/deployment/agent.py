@@ -11,6 +11,9 @@ class DeploymentAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("deployment"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "DevOps")
+        if skip_result is not None:
+            return skip_result
         req = state.get("requirements", {})
         arch = state.get("architecture", {})
         db = state.get("database_schema", {})

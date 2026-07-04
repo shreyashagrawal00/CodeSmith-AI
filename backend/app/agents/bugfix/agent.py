@@ -11,6 +11,9 @@ class BugfixAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("bugfix"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "BugFixer")
+        if skip_result is not None:
+            return skip_result
         review = state.get("review_report", {})
         security = state.get("security_report", {})
         total_issues = len(review.get("backend_issues", [])) + len(review.get("frontend_issues", [])) + len(security.get("vulnerabilities", []))

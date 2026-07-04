@@ -11,6 +11,9 @@ class ArchitectAgent(BaseLLMAgent):
         super().__init__(LLMRouter.get_fallback_chain_for_agent("architect"))
 
     def run(self, state: ProjectState) -> dict:
+        skip_result = self.skip_check(state, "Architect")
+        if skip_result is not None:
+            return skip_result
         req = state["requirements"]
         self._emit(state, "info", "🏗️ Designing system architecture", req.get("project_name", ""))
         response = self.invoke(
