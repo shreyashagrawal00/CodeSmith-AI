@@ -31,19 +31,29 @@ class BugfixAgent(BaseLLMAgent):
         )
         self._emit(state, "success", f"✅ Bugfix complete", f"{len(response.bugs_found)} bugs fixed | {len(response.changes_summary)} changes")
         
-        # Merge fixed code back into state dictionaries
+        # Merge fixed code back into state dictionaries.
+        # response.fixed_backend_files / fixed_frontend_files are now
+        # List[FileEdit] (key + content pairs) instead of a raw dict --
+        # see schemas/__init__.py for why (strict structured-output
+        # schema compatibility).
         backend_code = state.get("backend_code", {}).copy()
-        if response.fixed_backend_files:
-            for k, v in response.fixed_backend_files.items():
-                backend_code[k] = v
-            
+        for edit in response.fixed_backend_files:
+            backend_code[edit.key] = edit.content
+
         frontend_code = state.get("frontend_code", {}).copy()
-        if response.fixed_frontend_files:
-            for k, v in response.fixed_frontend_files.items():
-                if k in frontend_code.get("components_code", {}):
-                    frontend_code["components_code"][k] = v
-                else:
-                    frontend_code[k] = v
+        components_code = list(frontend_code.get("components_code") or [])
+        for edit in response.fixed_frontend_files:
+            # Check whether this key refers to an existing component
+            # filename first; if so, patch that component's code in place.
+            matched_component = False
+            for component in components_code:
+                if isinstance(component, dict) and component.get("filename") == edit.key:
+                    component["code"] = edit.content
+                    matched_component = True
+                    break
+            if not matched_component:
+                frontend_code[edit.key] = edit.content
+        frontend_code["components_code"] = components_code
 
         new_iterations = state.get("correction_iterations", 0) + 1
         

@@ -1,6 +1,25 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 
+
+class ComponentFile(BaseModel):
+    """One React component file. Used instead of a raw Dict[str, str] map
+    because several providers' strict structured-output / tool-calling
+    validation rejects "object" schemas with arbitrary keys
+    (additionalProperties, no fixed properties) -- observed as Groq's
+    "Failed to call a function" and Cerebras' "Object fields..." 400
+    errors. A list of fixed-shape objects is fully strict-schema
+    compatible."""
+    filename: str = Field(description="Component filename, e.g. 'Header.jsx'")
+    code: str = Field(description="React code content for this component")
+
+
+class FileEdit(BaseModel):
+    """One file/field correction from the bugfix agent. Same rationale as
+    ComponentFile above -- replaces a raw Dict[str, str] map."""
+    key: str = Field(description="Which field this fix applies to, e.g. 'main_file', 'routes_code', 'main_app_code', 'styles_code', or a components_code filename like 'Header.jsx'")
+    content: str = Field(description="The corrected file content")
+
 # 1. PM Agent Output Schema
 class PMOutput(BaseModel):
     project_name: str = Field(description="Name of the project")
@@ -40,7 +59,7 @@ class BackendCode(BaseModel):
 class FrontendCode(BaseModel):
     framework: str = Field(description="React or chosen frontend framework")
     main_app_code: str = Field(description="Content of App.jsx")
-    components_code: Dict[str, str] = Field(default={}, description="Map of component filenames to their React code content")
+    components_code: List[ComponentFile] = Field(default=[], description="List of component files (filename + code)")
     api_client_code: str = Field(description="Axios/Fetch client integration with backend")
     package_json: str = Field(description="package.json manifest code")
     dockerfile: str = Field(description="Dockerfile for frontend containerization")
@@ -75,8 +94,8 @@ class TestingReport(BaseModel):
 # 9. Bug Fix Engineer Agent Output Schema
 class BugfixReport(BaseModel):
     bugs_found: List[str] = Field(default=[], description="List of descriptions of bugs addressed")
-    fixed_backend_files: Dict[str, str] = Field(default={}, description="Map of backend keys (e.g. 'main_file', 'routes_code') to their updated file contents")
-    fixed_frontend_files: Dict[str, str] = Field(default={}, description="Map of frontend keys (e.g. 'main_app_code', 'components_code', 'styles_code') to their updated file contents")
+    fixed_backend_files: List[FileEdit] = Field(default=[], description="List of backend file fixes (key + corrected content). Valid keys: 'main_file', 'models_code', 'routes_code', 'services_code', 'requirements_txt', 'dockerfile'")
+    fixed_frontend_files: List[FileEdit] = Field(default=[], description="List of frontend file fixes (key + corrected content). Valid keys: 'main_app_code', 'api_client_code', 'package_json', 'dockerfile', 'styles_code', or a components_code filename like 'Header.jsx'")
     changes_summary: List[str] = Field(default=[], description="Summary log of changes made")
 
 # 10. Documentation Engineer Agent Output Schema

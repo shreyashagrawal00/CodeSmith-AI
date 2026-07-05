@@ -1,8 +1,14 @@
 ﻿import os
 import json
+import re
 from pathlib import Path
 
 GENERATED_DIR = Path(__file__).resolve().parents[2] / "generated_projects"
+
+# Matches e.g. `import './styles.css'` or `import "./App.css";` inside
+# AI-generated App.jsx -- used to catch cases where the model names its
+# stylesheet import something other than index.css (see write_project_files).
+_CSS_IMPORT_PATTERN = re.compile(r"""import\s+['"]\.\/([\w.-]+\.css)['"]""")
 
 
 def write_project_files(job_id: str, state: dict):
@@ -49,14 +55,27 @@ def write_project_files(job_id: str, state: dict):
     if frontend_code.get("styles_code"):
         (src_dir / "index.css").write_text(frontend_code["styles_code"], encoding="utf-8")
 
+        # The AI is free to name its own CSS import anything (e.g.
+        # 'styles.css', 'App.css') -- but we always write our own
+        # generated main.jsx to import 'index.css'. If App.jsx's own
+        # import doesn't match index.css, the build fails with
+        # "Could not resolve './whatever.css'". Detect the actual import
+        # and write a copy under that name too, so either resolves.
+        main_app_code = frontend_code.get("main_app_code") or ""
+        match = _CSS_IMPORT_PATTERN.search(main_app_code)
+        if match and match.group(1) != "index.css":
+            (src_dir / match.group(1)).write_text(frontend_code["styles_code"], encoding="utf-8")
+
     # Individual React components (previously silently dropped — the AI
-    # returns these as a filename -> code map, but nothing wrote them out).
-    components_code = frontend_code.get("components_code") or {}
+    # returns these as a list of {filename, code} objects).
+    components_code = frontend_code.get("components_code") or []
     if components_code:
         components_dir = src_dir / "components"
         components_dir.mkdir(exist_ok=True)
-        for filename, code in components_code.items():
-            if not code:
+        for component in components_code:
+            filename = component.get("filename") if isinstance(component, dict) else None
+            code = component.get("code") if isinstance(component, dict) else None
+            if not filename or not code:
                 continue
             # Guard against path traversal / nested paths in filenames.
             safe_name = Path(filename).name or "component.jsx"
