@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Terminal, Download, Cpu, RefreshCw, ExternalLink, Globe } from "lucide-react";
 import ProjectForm from "./components/ProjectForm";
 import ProgressBar from "./components/ProgressBar";
 import ProjectOutputViewer from "./components/ProjectOutputViewer";
 import LiveTerminal from "./components/LiveTerminal";
+
+const AUTO_PROCEED_SECONDS = 10;
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,12 @@ export default function App() {
   const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [autoProceedSeconds, setAutoProceedSeconds] = useState(null);
+  const [autoProceedCancelled, setAutoProceedCancelled] = useState(false);
+  // Refs mirror the state above so the interval callback always sees the
+  // latest value rather than a stale closure from when the interval was set up.
+  const autoProceedCancelledRef = useRef(false);
+  const handleApprovalRef = useRef(null);
 
   const handleSkip = async (agentId) => {
     try {
@@ -33,7 +41,19 @@ export default function App() {
     }
   };
 
-  const handleApproval = async (approved) => {
+  const cancelAutoProceed = useCallback(() => {
+    autoProceedCancelledRef.current = true;
+    setAutoProceedCancelled(true);
+    setAutoProceedSeconds(null);
+  }, []);
+
+  const handleApproval = useCallback(async (approved) => {
+    // Whichever path triggers this (manual click or the timer), stop the
+    // countdown immediately so it can't also fire afterward.
+    autoProceedCancelledRef.current = true;
+    setAutoProceedCancelled(true);
+    setAutoProceedSeconds(null);
+
     setSubmitLoading(true);
     setError(null);
     try {
@@ -54,7 +74,49 @@ export default function App() {
     } finally {
       setSubmitLoading(false);
     }
-  };
+  }, [jobId, feedback]);
+
+  // Keep a ref to the latest handleApproval so the countdown effect below
+  // doesn't need it in its dependency array (which would restart the timer
+  // every time `feedback` changes as the user types).
+  useEffect(() => {
+    handleApprovalRef.current = handleApproval;
+  }, [handleApproval]);
+
+  // Auto-proceed countdown: whenever the workflow pauses for human review,
+  // start a 10s countdown. If the user doesn't manually approve/reject
+  // before it runs out, auto-approve so the pipeline isn't stuck waiting
+  // on someone who stepped away.
+  useEffect(() => {
+    if (status !== "paused") {
+      setAutoProceedSeconds(null);
+      return;
+    }
+
+    autoProceedCancelledRef.current = false;
+    setAutoProceedCancelled(false);
+    setAutoProceedSeconds(AUTO_PROCEED_SECONDS);
+
+    const interval = setInterval(() => {
+      if (autoProceedCancelledRef.current) {
+        clearInterval(interval);
+        return;
+      }
+      setAutoProceedSeconds((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(interval);
+          if (!autoProceedCancelledRef.current) {
+            handleApprovalRef.current?.(true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [status, jobId]);
 
   const startGeneration = async (prompt) => {
     setLoading(true);
