@@ -126,7 +126,6 @@ async def run_workflow(job_id: str):
             "review_approved": False,
             "quality_score": 0.0,
             "correction_iterations": 0,
-            "skip_agents": job.get("skip_agents") or [],
         }
 
         config = {"configurable": {"thread_id": job_id}}
@@ -152,11 +151,21 @@ async def run_workflow(job_id: str):
             project_dir = write_project_files(job_id, _jobs[job_id])
             zip_project(job_id)
             preview_res = start_preview(job_id, project_dir)
-            if preview_res.get("success"):
-                _jobs[job_id]["preview"] = {
-                    "frontend_url": preview_res["frontend_url"],
-                    "backend_url": preview_res["backend_url"]
-                }
+            # NOTE: preview_res["success"] is (backend_up OR frontend_up),
+            # so it can be True while only ONE of the two URL keys exists.
+            # Bracket access on the other key raised a KeyError here that
+            # silently flipped a successfully-completed job to
+            # status="failed" -- the job actually finished fine, but the
+            # crash destroyed that status and all visibility into why no
+            # preview appeared. .get() + always recording whatever
+            # succeeded/failed fixes both problems.
+            _jobs[job_id]["preview"] = {
+                "frontend_url": preview_res.get("frontend_url"),
+                "backend_url": preview_res.get("backend_url"),
+                "backend_error": preview_res.get("backend_error"),
+                "frontend_error": preview_res.get("frontend_error"),
+                "error": preview_res.get("error"),
+            }
         else:
             # Paused at interrupt
             _jobs[job_id]["status"] = "paused"
@@ -216,11 +225,21 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
             project_dir = write_project_files(job_id, _jobs[job_id])
             zip_project(job_id)
             preview_res = start_preview(job_id, project_dir)
-            if preview_res.get("success"):
-                _jobs[job_id]["preview"] = {
-                    "frontend_url": preview_res["frontend_url"],
-                    "backend_url": preview_res["backend_url"]
-                }
+            # NOTE: preview_res["success"] is (backend_up OR frontend_up),
+            # so it can be True while only ONE of the two URL keys exists.
+            # Bracket access on the other key raised a KeyError here that
+            # silently flipped a successfully-completed job to
+            # status="failed" -- the job actually finished fine, but the
+            # crash destroyed that status and all visibility into why no
+            # preview appeared. .get() + always recording whatever
+            # succeeded/failed fixes both problems.
+            _jobs[job_id]["preview"] = {
+                "frontend_url": preview_res.get("frontend_url"),
+                "backend_url": preview_res.get("backend_url"),
+                "backend_error": preview_res.get("backend_error"),
+                "frontend_error": preview_res.get("frontend_error"),
+                "error": preview_res.get("error"),
+            }
         else:
             # Paused at another interrupt
             _jobs[job_id]["status"] = "paused"

@@ -58,11 +58,16 @@ class ProjectState(TypedDict):
     quality_score: float
     correction_iterations: int
 
-    # Agents the user has chosen to skip via the "Skip this agent" button.
-    # NOTE: this is NOT read from here at decision time -- see
-    # core/base_llm_agent.py's skip_check() for why. Kept for visibility/
-    # debugging only (e.g. inspecting a checkpoint).
-    skip_agents: list
+    # NOTE: skip requests are intentionally NOT part of ProjectState.
+    # See core/base_llm_agent.py's skip_check() -- it reads
+    # workflow_service._jobs[job_id] directly instead. A previous version
+    # of this code also threaded a "skip_agents" field through here for
+    # visibility, but that was actively harmful: stream_mode="values"
+    # yields the full accumulated state after every node, so
+    # _jobs[job_id].update(state_chunk) would overwrite the live,
+    # just-requested skip list with the stale value frozen in the graph's
+    # checkpoint from when the run started -- silently undoing every skip
+    # request. Keep skip requests OUT of the graph state.
 
     # Needed so skip_check() can look up the live job dict in
     # workflow_service._jobs by id -- set once at job creation and never

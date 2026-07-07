@@ -48,12 +48,20 @@ async def get_status(job_id: str):
 
 @router.get("/result/{job_id}")
 async def get_result(job_id: str):
-    """Return the full generated state (requirements, architecture, code, docs, etc.)."""
+    """Return the current generated state (requirements, architecture, code,
+    docs, etc.) -- whatever sections have been produced so far.
+
+    Deliberately allowed while status is "running", not just "completed"/
+    "paused" -- this is what lets the frontend show each agent's output
+    live as soon as it finishes, instead of only at pause points or the
+    very end. Sections not yet produced are just empty dicts, which
+    ProjectOutputViewer already renders as an empty state.
+    """
     job = get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.get("status") not in ("completed", "paused"):
-        raise HTTPException(status_code=202, detail="Job not completed or paused yet")
+    if job.get("status") == "failed":
+        raise HTTPException(status_code=202, detail="Job failed before producing a result")
     return job
 
 

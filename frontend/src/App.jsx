@@ -80,6 +80,7 @@ export default function App() {
   const fetchResult = useCallback(async () => {
     try {
       const response = await fetch(`http://localhost:8000/api/v1/result/${jobId}`);
+      if (!response.ok) return; // e.g. job just flipped to "failed" mid-poll; the status poller already surfaces that error
       const data = await response.json();
       setProjectData(data);
       setLoading(false);
@@ -97,7 +98,7 @@ export default function App() {
         setStatus(data.status);
         setCurrentAgent(data.current_agent);
         setLog(data.log || []);
-        
+
         if (data.status === "completed" || data.status === "paused") {
           clearInterval(interval);
           fetchResult();
@@ -105,6 +106,11 @@ export default function App() {
           clearInterval(interval);
           setError(data.error || "Workflow failed");
           setLoading(false);
+        } else if (data.status === "running") {
+          // Also pull whatever partial output exists so far, so completed
+          // sections (e.g. Requirements while Architect is still running)
+          // are viewable live instead of only at a pause/completion point.
+          fetchResult();
         }
       } catch {
         clearInterval(interval);
@@ -270,7 +276,7 @@ export default function App() {
           </div>
         )}
 
-        {(status === "completed" || status === "paused") && projectData && (
+        {(status === "completed" || status === "paused" || status === "running") && projectData && (
           <div className="w-full space-y-6 flex flex-col items-center">
             {status === "completed" && (
               <div className="flex flex-wrap items-center justify-center gap-4">
@@ -308,6 +314,24 @@ export default function App() {
                         <ExternalLink className="w-4.5 h-4.5" />
                       </a>
                     )}
+                  </div>
+                )}
+
+                {projectData.preview && !projectData.preview.frontend_url && !projectData.preview.backend_url && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-sm max-w-2xl">
+                    <span>
+                      Live preview couldn't start:{" "}
+                      {projectData.preview.error ||
+                        projectData.preview.frontend_error ||
+                        projectData.preview.backend_error ||
+                        "unknown error — check backend logs."}
+                    </span>
+                  </div>
+                )}
+
+                {projectData.preview && projectData.preview.backend_error && projectData.preview.frontend_url && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-sm max-w-2xl">
+                    <span>Frontend preview is live, but the backend preview failed to start: {projectData.preview.backend_error}</span>
                   </div>
                 )}
               </div>
