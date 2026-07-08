@@ -60,8 +60,9 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {AGENT_ROLES.map((agent) => {
           const entryStatus = statusByAgent.get(agent.id);
+          const hasLogEntry = statusByAgent.has(agent.id);
           const isSkipped = entryStatus === "skipped";
-          const isCompleted = (statusByAgent.has(agent.id) && !isSkipped) || (status === "completed");
+          const isCompleted = (hasLogEntry && !isSkipped) || (status === "completed");
           const isActive = currentAgent === agent.id && status === "running";
           const skipPending = skipRequested.has(agent.id);
           // Only offer skipping to agents that are neither active, already
@@ -83,7 +84,13 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
                 <div>
                   <h3 className="font-semibold text-sm text-slate-200">{agent.label}</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {isSkipped ? "Skipped by user" : skipPending ? "Skip requested…" : agent.desc}
+                    {isSkipped
+                      ? "Skipped by user"
+                      : hasLogEntry
+                        ? agent.desc  // authoritative outcome from the backend -- e.g. it actually ran normally because the skip request arrived after it had already started
+                        : skipPending
+                          ? "Skip requested…"
+                          : agent.desc}
                   </p>
                 </div>
                 <div>

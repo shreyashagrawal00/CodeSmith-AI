@@ -25,16 +25,27 @@ def write_project_files(job_id: str, state: dict):
     # Backend files
     be_dir = project_dir / "backend"
     be_dir.mkdir(exist_ok=True)
+
+    # Use whatever filename/extension the AI actually specified for the
+    # main file (e.g. 'main.py' for FastAPI, 'index.js' for Express) --
+    # previously this was hardcoded to main.py/requirements.txt/models.py/
+    # etc. regardless of the requested language, so asking for a Node.js
+    # backend still produced Python filenames (and a broken preview, since
+    # preview_service tried to `pip install` a package.json).
+    main_file_name = backend_code.get("main_file_name") or "main.py"
+    ext = Path(main_file_name).suffix or ".py"
+
     if backend_code.get("main_file"):
-        (be_dir / "main.py").write_text(backend_code["main_file"], encoding="utf-8")
+        (be_dir / main_file_name).write_text(backend_code["main_file"], encoding="utf-8")
     if backend_code.get("models_code"):
-        (be_dir / "models.py").write_text(backend_code["models_code"], encoding="utf-8")
+        (be_dir / f"models{ext}").write_text(backend_code["models_code"], encoding="utf-8")
     if backend_code.get("routes_code"):
-        (be_dir / "routes.py").write_text(backend_code["routes_code"], encoding="utf-8")
+        (be_dir / f"routes{ext}").write_text(backend_code["routes_code"], encoding="utf-8")
     if backend_code.get("services_code"):
-        (be_dir / "services.py").write_text(backend_code["services_code"], encoding="utf-8")
-    if backend_code.get("requirements_txt"):
-        (be_dir / "requirements.txt").write_text(backend_code["requirements_txt"], encoding="utf-8")
+        (be_dir / f"services{ext}").write_text(backend_code["services_code"], encoding="utf-8")
+    dependency_manifest_name = backend_code.get("dependency_manifest_name") or "requirements.txt"
+    if backend_code.get("dependency_manifest"):
+        (be_dir / dependency_manifest_name).write_text(backend_code["dependency_manifest"], encoding="utf-8")
     if backend_code.get("dockerfile"):
         (be_dir / "Dockerfile").write_text(backend_code["dockerfile"], encoding="utf-8")
 

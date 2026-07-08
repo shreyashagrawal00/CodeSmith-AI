@@ -28,7 +28,8 @@ class BackendAgent(BaseLLMAgent):
             },
             state=state,
         )
-        self._emit(state, "success", f"✅ Backend generated ({response.framework})", "main.py, models, routes, services, Dockerfile")
+        self._emit(state, "success", f"✅ Backend generated ({response.framework})",
+                   f"{response.main_file_name}, models, routes, services, {response.dependency_manifest_name}, Dockerfile")
         return {
             "backend_code": response.model_dump(),
             "log": [{"agent": "BackendEngineer", "status": "completed"}],

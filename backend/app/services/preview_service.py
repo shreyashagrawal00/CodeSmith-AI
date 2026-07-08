@@ -5,6 +5,8 @@ import subprocess
 import socket
 import logging
 import time
+import json
+from pathlib import Path
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,133 @@ def _run_blocking(cmd: list, cwd: str, timeout: int) -> None:
         )
 
 
+def _pip_available(python_exe: str) -> bool:
+    try:
+        subprocess.run(
+            [python_exe, "-m", "pip", "--version"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return False
+    except Exception:
+        return False
+
+
+def _ensure_pip(python_exe: str) -> None:
+    """Bootstrap pip into this interpreter's environment if it's missing.
+
+    Root cause this fixes: some Windows venvs (and some minimal Python
+    installs) don't have pip available, producing "No module named pip"
+    the moment we try `python -m pip install ...`. python's stdlib
+    ensurepip module can install pip without needing pip itself already
+    present, so we try that once before giving up.
+    """
+    proc = subprocess.run(
+        [python_exe, "-m", "pip", "--version"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=15,
+    )
+    if proc.returncode == 0:
+        return  # pip already works, nothing to do
+
+    logger.warning("pip not available for %s, attempting to bootstrap via ensurepip...", python_exe)
+    boot = subprocess.run(
+        [python_exe, "-m", "ensurepip", "--upgrade"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=60,
+    )
+    if boot.returncode != 0:
+        raise RuntimeError(
+            f"pip is unavailable for {python_exe} and could not be bootstrapped via ensurepip:\n"
+            f"{boot.stdout[-1500:]}\n\n"
+            f"Fix manually by running this yourself:\n  {python_exe} -m ensurepip --upgrade"
+        )
+    logger.info("pip successfully bootstrapped for %s", python_exe)
+
+
+def _detect_backend_runtime(backend_path: str) -> str:
+    """Detect what kind of backend was actually generated, instead of
+    assuming Python -- previously this code unconditionally ran
+    `pip install -r requirements.txt` and `uvicorn main:app` for every
+    generated backend, which silently broke (or produced misleading
+    errors) whenever the AI generated a Node.js/Express backend instead,
+    since there's no requirements.txt or main:app to run in that case.
+    """
+    if os.path.exists(os.path.join(backend_path, "package.json")):
+        return "node"
+    if os.path.exists(os.path.join(backend_path, "requirements.txt")):
+        return "python"
+    return "unknown"
+
+
+def _start_python_backend(python_exe: str, backend_path: str, port: int) -> subprocess.Popen:
+    requirements = os.path.join(backend_path, "requirements.txt")
+    if os.path.exists(requirements):
+        _ensure_pip(python_exe)
+        _run_blocking(
+            [python_exe, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"],
+            cwd=backend_path,
+            timeout=_INSTALL_TIMEOUT_SECS,
+        )
+
+    # Detect the actual entry module instead of assuming main:app --
+    # generated projects can name their entry file differently.
+    entry_module = "main:app"
+    for candidate in ("main.py", "app.py", "server.py"):
+        if os.path.exists(os.path.join(backend_path, candidate)):
+            entry_module = f"{Path(candidate).stem}:app"
+            break
+
+    logger.info(f"Starting Python preview backend on port {port} ({entry_module})...")
+    return subprocess.Popen(
+        [python_exe, "-m", "uvicorn", entry_module, "--port", str(port), "--host", "127.0.0.1"],
+        cwd=backend_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+
+def _start_node_backend(backend_path: str, port: int) -> subprocess.Popen:
+    npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+    node_cmd = "node.exe" if os.name == "nt" else "node"
+
+    package_json = os.path.join(backend_path, "package.json")
+    _run_blocking(
+        [npm_cmd, "install", "--silent"],
+        cwd=backend_path,
+        timeout=_INSTALL_TIMEOUT_SECS,
+    )
+
+    # Prefer an npm "start" script if one is defined; otherwise fall back
+    # to running the detected entry file directly with node.
+    start_cmd = [npm_cmd, "start"]
+    try:
+        with open(package_json, "r", encoding="utf-8") as f:
+            pkg = json.load(f)
+        if not (pkg.get("scripts") or {}).get("start"):
+            entry_file = "index.js"
+            for candidate in ("index.js", "server.js", "app.js"):
+                if os.path.exists(os.path.join(backend_path, candidate)):
+                    entry_file = candidate
+                    break
+            start_cmd = [node_cmd, entry_file]
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    logger.info(f"Starting Node.js preview backend on port {port} ({' '.join(start_cmd)})...")
+    env = os.environ.copy()
+    env["PORT"] = str(port)
+    return subprocess.Popen(
+        start_cmd,
+        cwd=backend_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+
+
 def start_preview(job_id: str, project_dir: str) -> dict:
     """Install dependencies, start the generated backend/frontend, and only
     report success once each server is actually accepting connections.
@@ -98,32 +227,29 @@ def start_preview(job_id: str, project_dir: str) -> dict:
     frontend_up = False
 
     try:
-        python_exe = _resolve_python()
-
-        # 1. Backend: install deps, then start uvicorn, then wait for the port.
+        # 1. Backend: detect Python vs Node.js and run the appropriate
+        #    install/start commands -- previously this always assumed
+        #    Python/pip/uvicorn regardless of what was actually generated.
         if os.path.exists(backend_path):
-            requirements = os.path.join(backend_path, "requirements.txt")
-            if os.path.exists(requirements):
-                _run_blocking(
-                    [python_exe, "-m", "pip", "install", "-r", "requirements.txt", "--break-system-packages", "--quiet"],
-                    cwd=backend_path,
-                    timeout=_INSTALL_TIMEOUT_SECS,
+            runtime = _detect_backend_runtime(backend_path)
+            if runtime == "python":
+                python_exe = _resolve_python()
+                backend_proc = _start_python_backend(python_exe, backend_path, backend_port)
+            elif runtime == "node":
+                backend_proc = _start_node_backend(backend_path, backend_port)
+            else:
+                logger.error(
+                    "Backend for job %s has neither requirements.txt nor package.json -- "
+                    "can't determine how to run it.", job_id,
                 )
 
-            logger.info(f"Starting preview backend on port {backend_port}...")
-            backend_proc = subprocess.Popen(
-                [python_exe, "-m", "uvicorn", "main:app", "--port", str(backend_port), "--host", "127.0.0.1"],
-                cwd=backend_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-            backend_up = _wait_for_port("127.0.0.1", backend_port, _PORT_WAIT_TIMEOUT_SECS)
-            if not backend_up:
-                logger.error(
-                    "Preview backend for job %s did not come up on port %d in time.",
-                    job_id, backend_port,
-                )
+            if backend_proc is not None:
+                backend_up = _wait_for_port("127.0.0.1", backend_port, _PORT_WAIT_TIMEOUT_SECS)
+                if not backend_up:
+                    logger.error(
+                        "Preview backend for job %s did not come up on port %d in time.",
+                        job_id, backend_port,
+                    )
 
         # 2. Frontend: install deps, then start the dev server, then wait for the port.
         if os.path.exists(frontend_path):

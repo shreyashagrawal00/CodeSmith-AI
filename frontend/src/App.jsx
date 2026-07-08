@@ -191,7 +191,17 @@ export default function App() {
         const data = JSON.parse(event.data);
         if (data.type === "progress") {
           setCurrentAgent(data.current_agent);
-          setStatus(data.job_status);
+          // NOTE: deliberately NOT calling setStatus(data.job_status) here.
+          // If this message's job_status is already a terminal value
+          // ("completed"), setting it immediately re-runs this effect
+          // (status is a dependency) and closes the socket right away --
+          // racing against the "done" message that's typically sent in the
+          // same burst right after this one. If "done" loses that race,
+          // fetchResult() never fires and the output viewer never renders,
+          // even though status now shows "completed". The "done" handler
+          // below is the sole source of truth for terminal status
+          // transitions; while running, status is already "running" from
+          // when the job started/resumed, so there's nothing to update here.
           setLog((prev) => {
             const exists = prev.some((e) => e.agent === data.agent);
             if (!exists) {
@@ -303,9 +313,23 @@ export default function App() {
                 <p className="text-sm text-slate-400">
                   Please review the generated output below. You can approve to proceed to the next step, or request revisions by typing feedback below and clicking Request Changes.
                 </p>
+                {autoProceedSeconds !== null && !autoProceedCancelled && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
+                    <span>Auto-approving and proceeding in {autoProceedSeconds}s if no action is taken…</span>
+                    <button
+                      onClick={cancelAutoProceed}
+                      className="shrink-0 underline decoration-dotted underline-offset-2 hover:text-indigo-200 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 <textarea
                   value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
+                  onChange={(e) => {
+                    setFeedback(e.target.value);
+                    if (e.target.value.trim()) cancelAutoProceed();
+                  }}
                   placeholder="Provide review feedback (optional if approving)..."
                   className="w-full h-24 bg-slate-950 border border-slate-800 focus:border-indigo-500/50 rounded-xl p-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition-all resize-none"
                 />

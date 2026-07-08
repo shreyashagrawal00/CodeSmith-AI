@@ -46,14 +46,16 @@ class DatabaseSchema(BaseModel):
 
 # 4. Backend Developer Agent Output Schema
 class BackendCode(BaseModel):
-    framework: str = Field(description="FastAPI or other chosen framework")
-    language: str = Field(description="Language used")
-    main_file: str = Field(description="Content of main.py")
-    models_code: str = Field(description="Database models (SQLAlchemy/SQLModel) file content")
-    routes_code: str = Field(description="FastAPI endpoints and routers file content")
-    services_code: str = Field(description="Business logic service functions file content")
-    requirements_txt: str = Field(description="requirements.txt dependencies file content")
-    dockerfile: str = Field(description="Dockerfile for backend containerization")
+    framework: str = Field(description="Backend framework, matching EXACTLY what was specified in the tech stack -- e.g. 'FastAPI' (Python), 'Express.js' (Node.js), 'NestJS' (Node.js), 'Django' (Python), 'Spring Boot' (Java). Do NOT default to FastAPI/Python unless that is what the tech stack actually specifies.")
+    language: str = Field(description="Programming language for the backend, matching the tech stack exactly (e.g. 'Python', 'JavaScript', 'TypeScript', 'Java').")
+    main_file: str = Field(description="Content of the main application entry file, written in the chosen language/framework's idioms and conventions.")
+    main_file_name: str = Field(description="Filename for the main entry file, matching the language's convention -- e.g. 'main.py' for Python/FastAPI, 'index.js' or 'server.js' for Node.js/Express, 'main.ts' for NestJS.")
+    models_code: str = Field(description="Database models file content, using an ORM/library appropriate for the chosen language (e.g. SQLAlchemy/SQLModel for Python, Prisma/Mongoose/Sequelize/TypeORM for Node.js).")
+    routes_code: str = Field(description="API endpoints/routers file content, written in the chosen framework's idioms.")
+    services_code: str = Field(description="Business logic service functions file content.")
+    dependency_manifest: str = Field(description="Dependency manifest file content, matching the chosen language -- e.g. requirements.txt content for Python, package.json content for Node.js.")
+    dependency_manifest_name: str = Field(description="Filename for the dependency manifest, matching the language convention -- e.g. 'requirements.txt' for Python, 'package.json' for Node.js.")
+    dockerfile: str = Field(description="Dockerfile for backend containerization, appropriate for the chosen language/runtime.")
 
 # 5. Frontend Developer Agent Output Schema
 class FrontendCode(BaseModel):
@@ -94,7 +96,7 @@ class TestingReport(BaseModel):
 # 9. Bug Fix Engineer Agent Output Schema
 class BugfixReport(BaseModel):
     bugs_found: List[str] = Field(default=[], description="List of descriptions of bugs addressed")
-    fixed_backend_files: List[FileEdit] = Field(default=[], description="List of backend file fixes (key + corrected content). Valid keys: 'main_file', 'models_code', 'routes_code', 'services_code', 'requirements_txt', 'dockerfile'")
+    fixed_backend_files: List[FileEdit] = Field(default=[], description="List of backend file fixes (key + corrected content). Valid keys: 'main_file', 'models_code', 'routes_code', 'services_code', 'dependency_manifest', 'dockerfile'")
     fixed_frontend_files: List[FileEdit] = Field(default=[], description="List of frontend file fixes (key + corrected content). Valid keys: 'main_app_code', 'api_client_code', 'package_json', 'dockerfile', 'styles_code', or a components_code filename like 'Header.jsx'")
     changes_summary: List[str] = Field(default=[], description="Summary log of changes made")
 
