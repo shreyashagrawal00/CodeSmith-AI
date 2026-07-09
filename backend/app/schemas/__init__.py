@@ -59,13 +59,17 @@ class BackendCode(BaseModel):
 
 # 5. Frontend Developer Agent Output Schema
 class FrontendCode(BaseModel):
-    framework: str = Field(description="React or chosen frontend framework")
-    main_app_code: str = Field(description="Content of App.jsx")
-    components_code: List[ComponentFile] = Field(default=[], description="List of component files (filename + code)")
-    api_client_code: str = Field(description="Axios/Fetch client integration with backend")
-    package_json: str = Field(description="package.json manifest code")
-    dockerfile: str = Field(description="Dockerfile for frontend containerization")
-    styles_code: str = Field(description="Tailwind CSS / index.css stylesheet code")
+    framework: str = Field(description="Frontend framework, matching EXACTLY what was specified in the tech stack -- e.g. 'React', 'Vue', 'Angular', 'Svelte', 'vanilla JavaScript'. Do NOT default to React unless that is what the tech stack actually specifies.")
+    main_app_code: str = Field(description="Content of the main application component/entry file, written in the chosen framework's idioms (e.g. App.jsx for React, App.vue for Vue, App.svelte for Svelte).")
+    main_app_file_name: str = Field(description="Filename for the main app component, matching the framework convention -- e.g. 'App.jsx' for React, 'App.vue' for Vue, 'App.svelte' for Svelte.")
+    components_code: List[ComponentFile] = Field(default=[], description="List of component files (filename + code), using the chosen framework's file extension (e.g. .jsx for React, .vue for Vue, .svelte for Svelte).")
+    api_client_code: str = Field(description="HTTP client integration with the backend (e.g. Axios/Fetch), written in the chosen framework's conventions.")
+    package_json: str = Field(description="package.json manifest code with dependencies matching the chosen framework, including a 'dev' (or 'start'/'serve') script to run a local dev server.")
+    dockerfile: str = Field(description="Dockerfile for frontend containerization.")
+    styles_code: str = Field(description="Main stylesheet code (CSS/SCSS/Tailwind) for the application.")
+    entry_point_code: str = Field(default="", description="Content of the JS/TS entry file that bootstraps/mounts the app into the DOM under a Vite-style workflow (e.g. main.jsx for React+Vite, main.js for Vue+Vite, main.ts for Svelte+Vite). Required for React/Vue/Svelte/vanilla-via-Vite; leave blank only for frameworks with a fundamentally different build tool (e.g. Angular CLI).")
+    entry_point_file_name: str = Field(default="", description="Filename for the entry point file, e.g. 'main.jsx', 'main.js', 'main.ts'.")
+    index_html: str = Field(default="", description="Content of index.html that loads the entry point via <script type=\"module\" src=\"/src/ENTRY_FILE\">, following Vite conventions. Leave blank only if not applicable to the chosen framework/build tool.")
 
 # 6. Reviewer Agent Output Schema
 class ReviewReport(BaseModel):
@@ -97,7 +101,7 @@ class TestingReport(BaseModel):
 class BugfixReport(BaseModel):
     bugs_found: List[str] = Field(default=[], description="List of descriptions of bugs addressed")
     fixed_backend_files: List[FileEdit] = Field(default=[], description="List of backend file fixes (key + corrected content). Valid keys: 'main_file', 'models_code', 'routes_code', 'services_code', 'dependency_manifest', 'dockerfile'")
-    fixed_frontend_files: List[FileEdit] = Field(default=[], description="List of frontend file fixes (key + corrected content). Valid keys: 'main_app_code', 'api_client_code', 'package_json', 'dockerfile', 'styles_code', or a components_code filename like 'Header.jsx'")
+    fixed_frontend_files: List[FileEdit] = Field(default=[], description="List of frontend file fixes (key + corrected content). Valid keys: 'main_app_code', 'entry_point_code', 'api_client_code', 'package_json', 'dockerfile', 'styles_code', or a components_code filename like 'Header.jsx'")
     changes_summary: List[str] = Field(default=[], description="Summary log of changes made")
 
 # 10. Documentation Engineer Agent Output Schema
