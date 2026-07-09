@@ -1,107 +1,164 @@
-# CodeSmith AI – Autonomous Multi-Agent Software Engineering Team
+# 🛠️ CodeSmith AI
+### *Autonomous Multi-Agent Software Engineering Platform*
 
-CodeSmith AI is an autonomous, stateful, multi-agent software engineering platform built with **LangGraph**, **FastAPI**, and **React + Vite + Tailwind CSS**. It simulates a complete software development lifecycle where specialized, state-contained agents collaborate through a single shared state to transform a natural-language prompt into a production-ready application.
-
----
-
-## 🚀 Features
-
-- **Multi-Agent Collaboration**: Orchestrates 11 specialized roles (Product Manager, Architect, DB Designer, Backend Engineer, Frontend Engineer, Code Reviewer, Security Auditor, QA Tester, Bug Fixer, Tech Writer, and DevOps Engineer) in an iterative, self-correcting LangGraph pipeline.
-- **Stateful Workflow Orchestration**: Uses LangGraph's shared state pattern to pass context between agents. No agent communicates directly with another; all state modifications are checked and merged through `ProjectState`.
-- **Structured LLM Outputs**: Enforces strict Pydantic schemas using model-level structured outputs to parse agent results reliably.
-- **Multi-LLM Routing**: Automatically routes tasks to optimal LLMs (Gemini, Groq, Mistral) based on task needs.
-- **WebSocket Streaming**: Stream agent progress, active logs, and status updates to the client in real-time.
-- **Downloadable Archives**: Automatically builds folder structures for generated projects and packages them as downloadable ZIP archives.
-
-### 🆕 Advanced Self-Correction & Workspace Features (Newly Upgraded)
-- **Automated Compiler Feedback Loop**: During the verification phase, the platform now writes generated code to disk and runs real compiler checks:
-  - **Frontend:** Installs dependencies and runs a full `vite build` check.
-  - **Backend:** Executes Python compilation checks (`py_compile`) to catch syntax, import, and logic errors.
-  - **Self-Correction:** Any compilation, build, or package resolution errors are captured and routed directly back to the **Bug Fixer** agent. It patches the code and repeats the process until the build compiles cleanly (up to 3 iterations).
-- **IDE Workspace Code Explorer**: The frontend output viewer includes a premium multi-file code browser. Instead of viewing a single static file dump, you can browse all generated source files—including components, routes, services, dependency manifests, configuration scripts, and middlewares—in an IDE-style explorer layout.
-- **Nested Folder Structure Support (`extra_files`)**: The backend generation engine now supports generating and creating files inside custom subfolders (e.g., `routes/taskRoutes.js`, `middleware/auth.js`, `utils/helpers.py`), matching the LLM's import statements perfectly.
-- **Resilient Previews**: Supports automated NPM package checks with dynamic `--legacy-peer-deps` fallback retries to handle conflicting React dependencies seamlessly.
+<p align="center">
+  <img src="https://img.shields.io/badge/LangGraph-Stateful_Orchestration-blueviolet?style=for-the-badge&logo=langchain&logoColor=white" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/FastAPI-Modern_API-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/React_Vite-Ultra_Fast_UI-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React + Vite" />
+  <img src="https://img.shields.io/badge/Tailwind_v4-Premium_Aesthetics-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
+</p>
 
 ---
 
-## 🛠️ Architecture Workflow
+## 🌌 Overview
+
+**CodeSmith AI** is an autonomous, stateful, multi-agent software engineering team that simulates a complete software development organization. Guided by a single natural language prompt, **11 specialized AI agents** collaborate through a shared state machine to build, compile, review, secure, test, and document production-ready full-stack applications.
+
+Unlike naive code generation scripts, CodeSmith AI integrates a **real-time compilation feedback loop**. If a generated application contains import bugs or syntax errors, the review engine intercepts the build logs and instructs the Bug Fixer agent to patch the code autonomously before shipping it to the client.
+
+---
+
+## 🧠 System Architecture & Agent Flow
+
+CodeSmith AI is powered by a **LangGraph state machine**. Rather than passing large context dumps directly between agents, all information is structured in a central `ProjectState` database.
 
 ```mermaid
 graph TD
-    User([User Prompt]) --> PM[Product Manager]
-    PM --> Arch[System Architect]
-    Arch --> DB[Database Designer]
-    DB --> BE[Backend Engineer]
-    BE --> FE[Frontend Engineer]
-    FE --> Rev[Code Reviewer / Compiler Validation]
-    
-    subgraph Self-Correction Loop (Up to 3 Iterations)
-        Rev --> |If Compilation or Quality Fails| BF[Bug Fixer]
-        BF --> |Re-Write & Re-Compile| Rev
+    %% Define Node Colors and Styles
+    classDef pm fill:#4f46e5,stroke:#312e81,color:#fff,stroke-width:2px;
+    classDef arch fill:#7c3aed,stroke:#4c1d95,color:#fff,stroke-width:2px;
+    classDef db fill:#0891b2,stroke:#0f766e,color:#fff,stroke-width:2px;
+    classDef dev fill:#2563eb,stroke:#1e3a8a,color:#fff,stroke-width:2px;
+    classDef check fill:#e11d48,stroke:#9f1239,color:#fff,stroke-width:2px;
+    classDef ship fill:#059669,stroke:#065f46,color:#fff,stroke-width:2px;
+    classDef gate fill:#d97706,stroke:#78350f,color:#fff,stroke-width:2px;
+
+    %% Nodes
+    User([User Prompt]) --> PM[1. Product Manager]:::pm
+    PM --> Arch[2. System Architect]:::arch
+    Arch --> Gate1{Human Gate 1}:::gate
+    Gate1 -->|Approve| DB[3. Database Designer]:::db
+    Gate1 -->|Feedback| PM
+    DB --> Gate2{Human Gate 2}:::gate
+    Gate2 -->|Approve| BE[4. Backend Developer]:::dev
+    Gate2 -->|Approve| FE[5. Frontend Developer]:::dev
+    Gate2 -->|Feedback| DB
+
+    %% Build & Compile
+    BE --> Join
+    FE --> Join[Fan-In Join]
+    Join --> Rev[6. Reviewer / Compiler]:::check
+
+    %% Self-Correction Loop
+    subgraph Self-Correction Loop (Up to 3 Runs)
+        Rev -->|Build Error / Anti-Pattern| BF[9. Bug Fixer]:::check
+        BF -->|Re-Compile & Validate| Rev
     end
 
-    Rev --> |If Approved| Sec[Security Auditor]
-    Sec --> QA[QA Tester]
-    QA --> Doc[Tech Writer]
-    Doc --> DevOps[DevOps Engineer]
+    Rev -->|Compile Success| Sec[7. Security Auditor]:::check
+    Sec --> QA[8. QA Testing Engineer]:::check
+    QA --> Doc[10. Tech Writer]:::ship
+    Doc --> DevOps[11. DevOps Engineer]:::ship
     DevOps --> End([Complete ZIP & Running Preview])
 ```
 
 ---
 
+## 👥 Meet the Team (The 11 Agents)
+
+| Role | Agent ID | Responsibilities | Output Artifact |
+| :--- | :--- | :--- | :--- |
+| **Product Manager** | `PM` | Translates user prompts into features, users, and core requirements. | `requirements.json` |
+| **System Architect** | `Architect` | Defines component design, api endpoint design, and technical stack. | `architecture.json` |
+| **Database Designer** | `DatabaseDesigner` | Architect database schemas, tables, relationships, and migration SQL scripts. | `database_schema.json` |
+| **Backend Developer** | `BackendEngineer` | Generates main app server, routes, services, models, and dependencies. | `backend_code` (`extra_files`) |
+| **Frontend Developer** | `FrontendEngineer` | Creates UI dashboard, state logic, stylesheets, and custom components. | `frontend_code` (`components/`) |
+| **Code Reviewer** | `Reviewer` | Runs **real-world build compilation checks** and rates structural quality. | `review_report.json` |
+| **Security Auditor** | `SecurityExpert` | Performs automated static analysis for OWASP risks and secret leaks. | `security_report.json` |
+| **QA Testing Engineer** | `QAEngineer` | Automatically creates backend unit/integration tests and frontend components tests. | `testing_report.json` |
+| **Bug Fixer** | `BugFixer` | Consumes compiler logs and auditor concerns to apply source code patches. | `bugfix_report.json` |
+| **Tech Writer** | `TechWriter` | Documents setup guides, architecture layouts, and API references. | `README.md`, `docs/` |
+| **DevOps Engineer** | `DevOps` | Creates Docker configs, docker-compose orchestration, and CI/CD pipelines. | `docker-compose.yml`, `ci.yml` |
+
+---
+
+## ⚡ Key Upgrades & Resilience Systems
+
+### 🔄 The Automated Compiler Loop
+To prevent broken code, CodeSmith AI integrates a validation module directly in the review step:
+* **Dynamic Scaffolding:** Writes generated files to a temporary workspace under `generated_projects/{job_id}/`.
+* **Frontend Build Check:** Resolves dependencies using `npm install` and triggers `npm run build` with Vite.
+* **Backend Syntax Check:** Runs `py_compile` on the generated Python files (or build tools for other languages) to catch import anomalies and structural bugs.
+* **Autonomous Remediation:** If a build fails (e.g. `Failed to resolve import "../apiClient"`), the error logs are injected directly into the **Bug Fixer**'s prompt to compile a clean patch.
+
+### 📁 Workspace File Explorer UI
+The React frontend has been upgraded with a developer-first **Workspace File Explorer**. Instead of dumping unstructured JSON blobs, the output dashboard lets you browse files in an IDE-style workspace:
+* Fully browse backend entry points, API routes, models, configuration files, and middleware directories.
+* Explore frontend components, style configurations, entry-point scripts, and HTML files.
+* Single-click copying for individual files or download the entire project as a ZIP archive.
+
+---
+
 ## 📂 Project Structure
 
-```
+```ascii
 CodeSmith AI/
+│
 ├── backend/
 │   ├── app/
-│   │   ├── agents/          # Specialized agent packages (PM, Architect, Reviewer, etc.)
-│   │   ├── api/             # REST routes and WebSocket streaming
-│   │   ├── core/            # BaseAgent, BaseLLMAgent, Providers definition
-│   │   ├── database/        # SQLite Persistence & SQLAlchemy tables
-│   │   ├── graph/           # LangGraph builder, state, and routing rules
-│   │   ├── guardrails/      # Output validators and parser logic
-│   │   ├── llms/            # Individual model drivers (Gemini, Groq, Mistral)
-│   │   └── services/        # Disk writes, build validation, live preview servers
-│   ├── main.py              # FastAPI application server entrypoint (uses Lifespan)
-│   └── test_graph.py        # Pipeline dry-run script
+│   │   ├── agents/          # Specialized agent definitions (PM, Architect, Reviewer, etc.)
+│   │   ├── api/             # HTTP REST controllers and real-time WebSocket stream
+│   │   ├── core/            # Fallback providers and LLM execution engine
+│   │   ├── database/        # SQLite job storage & SQLAlchemy ORM
+│   │   ├── graph/           # LangGraph builder, shared state, and routing rules
+│   │   ├── guardrails/      # Schema conformance checks
+│   │   ├── llms/            # Drivers for Gemini, Groq, and Mistral
+│   │   └── services/        # Disk writers, build compiler validation, preview server
+│   │
+│   ├── main.py              # FastAPI server entry point (configured with lifespan hooks)
+│   └── test_graph.py        # Command-line testing harness for graph runs
+│
 ├── frontend/
 │   ├── src/
-│   │   ├── components/      # UI Elements (ProjectForm, ProgressBar, OutputViewer workspace)
-│   │   ├── App.jsx          # Dashboard layout & WebSocket orchestration
-│   │   └── index.css        # Tailwind v4 theme styling
-│   ├── package.json
-│   └── vite.config.js
-├── docker/                  # Docker build resources
-├── docker-compose.yml       # Production Compose orchestrator
+│   │   ├── components/      # ProjectForm, ProgressBar, and OutputExplorer components
+│   │   ├── App.jsx          # WebSocket listener & dashboard state controller
+│   │   └── index.css        # Tailwind CSS import styles & custom keyframes
+│   │
+│   ├── package.json         # Client dependencies
+│   └── vite.config.js       # Vite bundler options
+│
 └── README.md                # System documentation
 ```
 
 ---
 
-## ⚡ Quickstart
+## 🚀 Getting Started
 
-### Prerequisite Environment Configuration
+### 📋 Prerequisites
+* **Node.js** (v18 or higher)
+* **Python** (3.10 or higher)
+* API Keys for LLM Providers (Gemini, Groq, or Mistral)
 
+### 🗝️ Environment Settings
 Create a `.env` file inside `backend/`:
 ```env
-GEMINI_API_KEY=your_gemini_key
-GROQ_API_KEY=your_groq_key
-MISTRAL_API_KEY=your_mistral_key
+GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+MISTRAL_API_KEY=your_mistral_api_key_here
 ```
 
-### Option A: Local Development
+### 💻 Local Run
 
-#### 1. Backend Setup
+#### 1. Start the Backend Server
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate  # Or `.venv\Scripts\activate` on Windows
+source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-#### 2. Frontend Setup
+#### 2. Start the Frontend Dashboard
 ```bash
 cd frontend
 npm install
@@ -109,19 +166,28 @@ npm run dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Option B: Docker Compose
+---
+
+## 🐳 Docker Deployment
+
+To spin up the entire application stack using Docker Compose:
 ```bash
 docker-compose up --build
 ```
-- Frontend: [http://localhost:3000](http://localhost:3000)
-- Backend: [http://localhost:8000](http://localhost:8000)
+* **Frontend:** [http://localhost:3000](http://localhost:3000)
+* **Backend:** [http://localhost:8000](http://localhost:8000)
 
 ---
 
-## 📈 Verification
+## 🧪 Pipeline Dry Run
 
-To verify that the multi-agent graph builder runs correctly without starting the API server, execute the mock workflow runner:
+You can dry-run the LangGraph state machine in terminal mode to verify your keys and agent routing without launching the web server:
 ```bash
 cd backend
 .venv/bin/python test_graph.py
 ```
+
+---
+
+> [!TIP]
+> **Resiliency Tip:** If `npm install` fails inside a generated app due to conflicts between package versions, the preview engine will automatically run a fallback installer with `--legacy-peer-deps` to guarantee the preview server successfully starts.
