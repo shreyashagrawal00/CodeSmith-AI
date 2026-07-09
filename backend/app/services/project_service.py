@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import re
 from pathlib import Path
@@ -9,6 +9,67 @@ GENERATED_DIR = Path(__file__).resolve().parents[2] / "generated_projects"
 # AI-generated App.jsx -- used to catch cases where the model names its
 # stylesheet import something other than index.css (see write_project_files).
 _CSS_IMPORT_PATTERN = re.compile(r"""import\s+['"]\.\/([\w.-]+\.css)['"]""")
+
+
+def _ensure_vite_package_json(raw_pkg_json: str, main_app_file_name: str = "App.jsx") -> str:
+    """Normalise an LLM-generated package.json so it always uses Vite.
+
+    The LLM occasionally generates a Create-React-App style package.json
+    (react-scripts start/build) even though we inject a vite.config.js and
+    a Vite-style main.jsx. That mismatch means `npm install` either installs
+    the entire CRA toolchain (slow, >100 MB) or fails outright because
+    react-scripts has undeclared peer dependencies that conflict with newer
+    Node versions.  This function detects and fixes the most common
+    incompatible patterns so we always get a lightweight Vite project.
+    """
+    try:
+        pkg = json.loads(raw_pkg_json)
+    except (json.JSONDecodeError, TypeError):
+        # If the LLM gave us garbage JSON, return a safe minimal default.
+        pkg = {}
+
+    pkg.setdefault("name", "generated-app")
+    pkg.setdefault("version", "1.0.0")
+    pkg["type"] = "module"
+    pkg["private"] = True
+
+    # --- Fix scripts ---
+    scripts = pkg.get("scripts", {})
+    # Remove CRA scripts
+    for bad in ("react-scripts start", "react-scripts build",
+                "react-scripts test", "react-scripts eject"):
+        for k, v in list(scripts.items()):
+            if v == bad:
+                del scripts[k]
+    # Always set the Vite scripts
+    scripts["dev"] = "vite"
+    scripts["build"] = "vite build"
+    scripts["preview"] = "vite preview"
+    pkg["scripts"] = scripts
+
+    # --- Fix dependencies ---
+    deps = pkg.get("dependencies", {})
+    dev_deps = pkg.get("devDependencies", {})
+
+    # Remove CRA from everywhere
+    for bad in ("react-scripts", "@craco/craco"):
+        deps.pop(bad, None)
+        dev_deps.pop(bad, None)
+
+    # Ensure React is in dependencies
+    deps.setdefault("react", "^18.3.1")
+    deps.setdefault("react-dom", "^18.3.1")
+
+    # Ensure Vite is in devDependencies
+    dev_deps["vite"] = dev_deps.get("vite") or "^5.4.0"
+    dev_deps["@vitejs/plugin-react"] = dev_deps.get("@vitejs/plugin-react") or "^4.3.1"
+
+    if deps:
+        pkg["dependencies"] = deps
+    if dev_deps:
+        pkg["devDependencies"] = dev_deps
+
+    return json.dumps(pkg, indent=2)
 
 
 def write_project_files(job_id: str, state: dict):
@@ -60,7 +121,11 @@ def write_project_files(job_id: str, state: dict):
     if frontend_code.get("api_client_code"):
         (src_dir / "api.js").write_text(frontend_code["api_client_code"], encoding="utf-8")
     if frontend_code.get("package_json"):
-        (fe_dir / "package.json").write_text(frontend_code["package_json"], encoding="utf-8")
+        normalized_pkg = _ensure_vite_package_json(
+            frontend_code["package_json"],
+            frontend_code.get("main_app_file_name", "App.jsx"),
+        )
+        (fe_dir / "package.json").write_text(normalized_pkg, encoding="utf-8")
     if frontend_code.get("dockerfile"):
         (fe_dir / "Dockerfile").write_text(frontend_code["dockerfile"], encoding="utf-8")
     if frontend_code.get("styles_code"):
@@ -93,51 +158,71 @@ def write_project_files(job_id: str, state: dict):
             (components_dir / safe_name).write_text(code, encoding="utf-8")
 
     # Static Vite boilerplate: the LLM-generated FrontendCode schema only
-    # produces App.jsx/api.js/styles/package.json — it never produces an
-    # index.html or a main.jsx entry point, so `npm run dev` has nothing to
-    # actually serve. These two files are effectively identical for any
-    # Vite + React app, so we write them directly rather than depending on
-    # the model to generate boilerplate correctly every time.
-    if frontend_code.get("main_app_code") and not (fe_dir / "index.html").exists():
-        (fe_dir / "index.html").write_text(
-            '<!doctype html>\n'
-            '<html lang="en">\n'
-            '  <head>\n'
-            '    <meta charset="UTF-8" />\n'
-            '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
-            '    <title>CodeSmith AI Generated App</title>\n'
-            '  </head>\n'
-            '  <body>\n'
-            '    <div id="root"></div>\n'
-            '    <script type="module" src="/src/main.jsx"></script>\n'
-            '  </body>\n'
-            '</html>\n',
-            encoding="utf-8",
-        )
-    if frontend_code.get("main_app_code") and not (src_dir / "main.jsx").exists():
+    # produces App.jsx/api.js/styles/package.json. We also write index.html,
+    # main.jsx, and vite.config.js if the LLM didn't provide them, so
+    # `npm run dev` always has what it needs.
+    #
+    # Prefer LLM-provided files over boilerplate when available (schema fields
+    # entry_point_code/entry_point_file_name/index_html), so framework-specific
+    # scaffolding (e.g. Vue/Svelte) is respected.
+    if frontend_code.get("main_app_code"):
+        entry_file_name = frontend_code.get("entry_point_file_name") or "main.jsx"
+        entry_code = frontend_code.get("entry_point_code")
         has_css = bool(frontend_code.get("styles_code"))
-        (src_dir / "main.jsx").write_text(
-            "import React from 'react';\n"
-            "import ReactDOM from 'react-dom/client';\n"
-            "import App from './App.jsx';\n"
-            + ("import './index.css';\n" if has_css else "")
-            + "\n"
-            "ReactDOM.createRoot(document.getElementById('root')).render(\n"
-            "  <React.StrictMode>\n"
-            "    <App />\n"
-            "  </React.StrictMode>\n"
-            ");\n",
-            encoding="utf-8",
-        )
-    if frontend_code.get("main_app_code") and not (fe_dir / "vite.config.js").exists():
-        (fe_dir / "vite.config.js").write_text(
-            "import { defineConfig } from 'vite';\n"
-            "import react from '@vitejs/plugin-react';\n\n"
-            "export default defineConfig({\n"
-            "  plugins: [react()],\n"
-            "});\n",
-            encoding="utf-8",
-        )
+
+        if not (src_dir / entry_file_name).exists():
+            if entry_code:
+                (src_dir / entry_file_name).write_text(entry_code, encoding="utf-8")
+            else:
+                (src_dir / entry_file_name).write_text(
+                    "import React from 'react';\n"
+                    "import ReactDOM from 'react-dom/client';\n"
+                    "import App from './App.jsx';\n"
+                    + ("import './index.css';\n" if has_css else "")
+                    + "\n"
+                    "ReactDOM.createRoot(document.getElementById('root')).render(\n"
+                    "  <React.StrictMode>\n"
+                    "    <App />\n"
+                    "  </React.StrictMode>\n"
+                    ");\n",
+                    encoding="utf-8",
+                )
+
+        if not (fe_dir / "index.html").exists():
+            ai_index_html = frontend_code.get("index_html")
+            if ai_index_html:
+                (fe_dir / "index.html").write_text(ai_index_html, encoding="utf-8")
+            else:
+                (fe_dir / "index.html").write_text(
+                    '<!doctype html>\n'
+                    '<html lang="en">\n'
+                    '  <head>\n'
+                    '    <meta charset="UTF-8" />\n'
+                    '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
+                    '    <title>CodeSmith AI Generated App</title>\n'
+                    '  </head>\n'
+                    '  <body>\n'
+                    '    <div id="root"></div>\n'
+                    f'    <script type="module" src="/src/{entry_file_name}"></script>\n'
+                    '  </body>\n'
+                    '</html>\n',
+                    encoding="utf-8",
+                )
+
+        if not (fe_dir / "vite.config.js").exists():
+            (fe_dir / "vite.config.js").write_text(
+                "import { defineConfig } from 'vite';\n"
+                "import react from '@vitejs/plugin-react';\n\n"
+                "export default defineConfig({\n"
+                "  plugins: [react()],\n"
+                "});\n",
+                encoding="utf-8",
+            )
+
+        # If no package.json was provided by the LLM, write a safe Vite default.
+        if not (fe_dir / "package.json").exists():
+            safe_pkg = _ensure_vite_package_json("{}", frontend_code.get("main_app_file_name", "App.jsx"))
+            (fe_dir / "package.json").write_text(safe_pkg, encoding="utf-8")
 
     # Database migration
     db_dir = project_dir / "database"

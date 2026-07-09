@@ -246,6 +246,12 @@ export default function App() {
     setLiveEvents([]);
     setProjectData(null);
     setError(null);
+    setLoading(false);
+    setSubmitLoading(false);
+    setFeedback("");
+    setAutoProceedSeconds(null);
+    setAutoProceedCancelled(false);
+    autoProceedCancelledRef.current = false;
   };
 
   return (
@@ -352,7 +358,7 @@ export default function App() {
               </div>
             )}
 
-            <LiveTerminal events={liveEvents} />
+            {liveEvents.length > 0 && <LiveTerminal events={liveEvents} />}
           </>
         )}
 
@@ -385,7 +391,7 @@ export default function App() {
                       >
                         <Globe className="w-5 h-5" />
                         Open Live Frontend
-                        <ExternalLink className="w-4.5 h-4.5" />
+                        <ExternalLink className="w-4 h-4" />
                       </a>
                     )}
                     {projectData.preview.backend_url && (
@@ -397,7 +403,7 @@ export default function App() {
                       >
                         <Terminal className="w-5 h-5" />
                         API Swagger Docs
-                        <ExternalLink className="w-4.5 h-4.5" />
+                        <ExternalLink className="w-4 h-4" />
                       </a>
                     )}
                   </div>

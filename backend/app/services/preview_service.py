@@ -20,6 +20,85 @@ _PORT_WAIT_TIMEOUT_SECS = 30
 _PORT_WAIT_POLL_INTERVAL = 0.5
 
 
+def _normalize_frontend_package_json(frontend_path: str) -> None:
+    """Rewrite the generated frontend package.json to be Vite-compatible.
+
+    This is a last-line-of-defence fix: project_service already normalises
+    the package.json when writing files, but older generated projects that
+    were written before that fix was deployed will still have a CRA-style
+    package.json on disk.  Running this at preview time catches both old
+    and new projects.
+    """
+    pkg_path = os.path.join(frontend_path, "package.json")
+    if not os.path.exists(pkg_path):
+        return
+    try:
+        with open(pkg_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+        pkg = json.loads(raw)
+    except Exception:
+        return  # corrupt file -- let npm install surface the real error
+
+    changed = False
+
+    # Force Vite build tool
+    scripts = pkg.get("scripts", {})
+    if scripts.get("start") and "react-scripts" in scripts["start"]:
+        del scripts["start"]
+        changed = True
+    if scripts.get("build") and "react-scripts" in scripts["build"]:
+        changed = True
+    if scripts.get("test") and "react-scripts" in scripts["test"]:
+        del scripts["test"]
+        changed = True
+    if scripts.get("eject") and "react-scripts" in str(scripts.get("eject", "")):
+        del scripts["eject"]
+        changed = True
+
+    scripts["dev"] = "vite"
+    scripts["build"] = "vite build"
+    scripts["preview"] = "vite preview"
+    pkg["scripts"] = scripts
+    pkg["type"] = "module"
+
+    deps = pkg.get("dependencies", {})
+    dev_deps = pkg.get("devDependencies", {})
+
+    for bad in ("react-scripts", "@craco/craco"):
+        if bad in deps:
+            del deps[bad]
+            changed = True
+        if bad in dev_deps:
+            del dev_deps[bad]
+            changed = True
+
+    deps.setdefault("react", "^18.3.1")
+    deps.setdefault("react-dom", "^18.3.1")
+    if "vite" not in dev_deps:
+        dev_deps["vite"] = "^5.4.0"
+        changed = True
+    if "@vitejs/plugin-react" not in dev_deps:
+        dev_deps["@vitejs/plugin-react"] = "^4.3.1"
+        changed = True
+
+    pkg["dependencies"] = deps
+    pkg["devDependencies"] = dev_deps
+
+    if changed:
+        logger.info("Normalised package.json to Vite at %s", pkg_path)
+        with open(pkg_path, "w", encoding="utf-8") as f:
+            json.dump(pkg, f, indent=2)
+
+
+# Active preview processes: job_id -> { "backend_proc": Popen, "frontend_proc": Popen, "backend_port": int, "frontend_port": int }
+_active_previews: Dict[str, dict] = {}
+
+# How long to wait for each dependency-install step and each server to come up.
+_INSTALL_TIMEOUT_SECS = 180
+_PORT_WAIT_TIMEOUT_SECS = 30
+_PORT_WAIT_POLL_INTERVAL = 0.5
+
+
 def get_free_port() -> int:
     """Find a free TCP port on localhost."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -77,7 +156,7 @@ def _run_blocking(cmd: list, cwd: str, timeout: int) -> None:
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"Command failed ({' '.join(cmd)}) in {cwd}:\n{proc.stdout[-2000:]}"
+            f"Command failed ({' '.join(cmd)}) in {cwd}:\n{proc.stdout[-3000:]}"
         )
 
 
@@ -251,16 +330,36 @@ def start_preview(job_id: str, project_dir: str) -> dict:
                         job_id, backend_port,
                     )
 
-        # 2. Frontend: install deps, then start the dev server, then wait for the port.
+        # 2. Frontend: normalise package.json, install deps, start dev server.
         if os.path.exists(frontend_path):
             package_json = os.path.join(frontend_path, "package.json")
             if os.path.exists(package_json):
+                # Fix CRA / non-Vite package.json before npm install
+                _normalize_frontend_package_json(frontend_path)
+
                 npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
-                _run_blocking(
-                    [npm_cmd, "install", "--silent"],
-                    cwd=frontend_path,
-                    timeout=_INSTALL_TIMEOUT_SECS,
-                )
+                try:
+                    _run_blocking(
+                        [npm_cmd, "install"],
+                        cwd=frontend_path,
+                        timeout=_INSTALL_TIMEOUT_SECS,
+                    )
+                except RuntimeError as npm_err:
+                    # Peer-dep conflicts are common with mixed React versions.
+                    # Retry once with --legacy-peer-deps before giving up.
+                    err_text = str(npm_err)
+                    if "peer dep" in err_text.lower() or "ERESOLVE" in err_text:
+                        logger.warning(
+                            "npm install failed with peer-dep conflict for job %s; "
+                            "retrying with --legacy-peer-deps", job_id
+                        )
+                        _run_blocking(
+                            [npm_cmd, "install", "--legacy-peer-deps"],
+                            cwd=frontend_path,
+                            timeout=_INSTALL_TIMEOUT_SECS,
+                        )
+                    else:
+                        raise
 
             logger.info(f"Starting preview frontend on port {frontend_port}...")
             npm_cmd = "npm.cmd" if os.name == "nt" else "npm"

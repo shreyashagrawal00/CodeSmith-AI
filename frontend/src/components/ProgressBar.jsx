@@ -62,13 +62,14 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
           const entryStatus = statusByAgent.get(agent.id);
           const hasLogEntry = statusByAgent.has(agent.id);
           const isSkipped = entryStatus === "skipped";
-          const isCompleted = (hasLogEntry && !isSkipped) || (status === "completed");
+          const isCompleted = hasLogEntry && !isSkipped && (entryStatus !== "skipped");
+          const isJobDoneNoEntry = status === "completed" && !hasLogEntry && !isSkipped;
           const isActive = currentAgent === agent.id && status === "running";
           const skipPending = skipRequested.has(agent.id);
           // Only offer skipping to agents that are neither active, already
           // finished/skipped, nor already requested -- and only while the
           // job is actually running (no point once it's done or failed).
-          const canSkip = status === "running" && !isActive && !isCompleted && !isSkipped && !skipPending;
+          const canSkip = status === "running" && !isActive && !isCompleted && !isJobDoneNoEntry && !isSkipped && !skipPending;
 
           return (
             <div 
@@ -76,7 +77,7 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
               className={`p-4 rounded-xl border transition-all duration-300 ${
                 isActive ? "bg-indigo-500/10 border-indigo-500 glow-indigo" :
                 isSkipped ? "bg-amber-500/5 border-amber-500/30" :
-                isCompleted ? "bg-emerald-500/5 border-emerald-500/30" :
+                (isCompleted || isJobDoneNoEntry) ? "bg-emerald-500/5 border-emerald-500/30" :
                 "bg-slate-950/20 border-slate-800/50 opacity-60"
               }`}
             >
@@ -96,7 +97,7 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
                 <div>
                   {isSkipped ? (
                     <SkipForward className="w-5 h-5 text-amber-400" />
-                  ) : isCompleted ? (
+                  ) : (isCompleted || isJobDoneNoEntry) ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   ) : isActive ? (
                     <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />

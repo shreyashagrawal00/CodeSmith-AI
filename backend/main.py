@@ -1,23 +1,27 @@
-﻿from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.api.websocket import ws_router
 from app.database.db import init_db
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Creates the SQLite tables (backend/codesmith.db) if they don't exist
+    # yet. Safe to call every time the app starts.
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="CodeSmith AI",
     description="Autonomous Multi-Agent Software Engineering Platform",
     version="1.0.0",
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-def on_startup():
-    # Creates the SQLite tables (backend/codesmith.db) if they don't exist
-    # yet. Safe to call every time the app starts.
-    init_db()
-
 
 # CORS – allow the React frontend
 app.add_middleware(

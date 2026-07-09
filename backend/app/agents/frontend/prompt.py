@@ -1,14 +1,24 @@
-﻿from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 FRONTEND_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
             """
-You are an expert Frontend Engineer.
+You are an expert Frontend Engineer specializing in React + Vite applications.
 
 Generate complete, production-ready frontend code based on the system architecture and backend API design.
-Include main App component, key page components, API client, package.json, and a Dockerfile.
+
+CRITICAL RULES for the package.json you generate:
+- The build tool MUST be Vite (NOT Create React App / react-scripts).
+- You MUST include "@vitejs/plugin-react" and "vite" in devDependencies.
+- You MUST include a "dev" script: "vite" (e.g. "dev": "vite").
+- You MUST include a "build" script: "vite build".
+- Do NOT include "react-scripts" anywhere in the package.json.
+- Use "type": "module" in the package.json.
+
+The entry point must be main.jsx (or main.tsx for TypeScript) that mounts App into <div id="root">.
+Include App component, key page components, API client (using fetch or axios), and a Dockerfile.
 Use React with modern hooks and clean, responsive design.
 
 Return ONLY the requested structured output.
