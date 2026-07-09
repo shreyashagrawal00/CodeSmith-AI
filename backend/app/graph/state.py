@@ -57,6 +57,9 @@ class ProjectState(TypedDict):
     review_approved: bool
     quality_score: float
     correction_iterations: int
+    # Compilation/build errors from the last Reviewer validation run —
+    # passed into the BugFixer prompt so it can fix actual runtime errors.
+    compilation_errors: str
 
     # NOTE: skip requests are intentionally NOT part of ProjectState.
     # See core/base_llm_agent.py's skip_check() -- it reads

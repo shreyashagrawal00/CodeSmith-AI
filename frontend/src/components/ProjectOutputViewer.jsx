@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Copy, Check, FileText, Database, ShieldAlert, Award, Terminal, Code, Settings, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 
 const TAB_GROUPS = [
@@ -50,6 +50,7 @@ const ALL_TABS = TAB_GROUPS.flatMap((g) => g.tabs.map((t) => ({ ...t, accent: g.
 export default function ProjectOutputViewer({ projectData }) {
   const [activeTab, setActiveTab] = useState("requirements");
   const [copied, setCopied] = useState(false);
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollerRef = useRef(null);
@@ -73,6 +74,10 @@ export default function ProjectOutputViewer({ projectData }) {
     };
   }, []);
 
+  useEffect(() => {
+    setSelectedFileIndex(0);
+  }, [activeTab]);
+
   const scrollBy = (delta) => {
     scrollerRef.current?.scrollBy({ left: delta, behavior: "smooth" });
   };
@@ -80,9 +85,144 @@ export default function ProjectOutputViewer({ projectData }) {
   if (!projectData) return null;
 
   const copyToClipboard = (text) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getBackendFiles = () => {
+    const data = projectData?.backend_code;
+    if (!data) return [];
+    const list = [];
+    if (data.main_file) {
+      list.push({ name: data.main_file_name || "main.py", code: data.main_file });
+    }
+    const ext = (data.main_file_name || "main.py").endsWith(".py") ? ".py" : ".js";
+    if (data.models_code) {
+      list.push({ name: `models${ext}`, code: data.models_code });
+    }
+    if (data.routes_code) {
+      list.push({ name: `routes${ext}`, code: data.routes_code });
+    }
+    if (data.services_code) {
+      list.push({ name: `services${ext}`, code: data.services_code });
+    }
+    if (data.dependency_manifest) {
+      list.push({ name: data.dependency_manifest_name || "requirements.txt", code: data.dependency_manifest });
+    }
+    if (data.dockerfile) {
+      list.push({ name: "Dockerfile", code: data.dockerfile });
+    }
+    if (data.extra_files) {
+      data.extra_files.forEach((f) => {
+        list.push({ name: f.path || f.filename || "file", code: f.code });
+      });
+    }
+    return list;
+  };
+
+  const getFrontendFiles = () => {
+    const data = projectData?.frontend_code;
+    if (!data) return [];
+    const list = [];
+    if (data.main_app_code) {
+      list.push({ name: data.main_app_file_name || "App.jsx", code: data.main_app_code });
+    }
+    if (data.entry_point_code) {
+      list.push({ name: data.entry_point_file_name || "main.jsx", code: data.entry_point_code });
+    }
+    if (data.api_client_code) {
+      list.push({ name: "api.js", code: data.api_client_code });
+    }
+    if (data.styles_code) {
+      list.push({ name: "index.css", code: data.styles_code });
+    }
+    if (data.index_html) {
+      list.push({ name: "index.html", code: data.index_html });
+    }
+    if (data.package_json) {
+      list.push({ name: "package.json", code: data.package_json });
+    }
+    if (data.dockerfile) {
+      list.push({ name: "Dockerfile", code: data.dockerfile });
+    }
+    if (data.components_code) {
+      data.components_code.forEach((c) => {
+        list.push({ name: `components/${c.filename}`, code: c.code });
+      });
+    }
+    return list;
+  };
+
+  const renderFileViewer = (files, framework) => {
+    if (!files || files.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
+          <Inbox className="w-8 h-8" />
+          <p className="text-sm font-medium">No files generated for this stage.</p>
+        </div>
+      );
+    }
+    const currentFile = files[selectedFileIndex] || files[0] || { name: "", code: "" };
+
+    return (
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* File Sidebar */}
+        <div className="w-full md:w-64 flex-shrink-0 bg-slate-950/40 border border-slate-800/80 rounded-xl overflow-hidden flex flex-col max-h-[480px]">
+          <div className="px-4 py-3 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Workspace</span>
+            {framework && (
+              <span className="px-2 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-md text-[10px] font-bold uppercase">
+                {framework}
+              </span>
+            )}
+          </div>
+          <div className="overflow-y-auto p-2 space-y-1">
+            {files.map((file, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedFileIndex(idx)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold font-mono flex items-center gap-2 transition-all ${
+                  selectedFileIndex === idx
+                    ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 border border-transparent"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate">{file.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Code Content */}
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-950/40 border border-slate-800/80 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between">
+            <span className="text-xs font-bold font-mono text-slate-300 truncate">{currentFile.name}</span>
+            <button
+              onClick={() => copyToClipboard(currentFile.code)}
+              className="px-2.5 py-1 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 rounded-md transition-all flex items-center gap-1.5 text-[10px] font-bold"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  Copy File
+                </>
+              )}
+            </button>
+          </div>
+          <pre className="text-xs font-mono p-4 overflow-x-auto text-slate-300 max-h-[420px] overflow-y-auto leading-relaxed whitespace-pre-wrap">
+            {currentFile.code || "// Empty file"}
+          </pre>
+        </div>
+      </div>
+    );
   };
 
   const currentMeta = ALL_TABS.find((t) => t.id === activeTab);
@@ -156,23 +296,25 @@ export default function ProjectOutputViewer({ projectData }) {
           <span className={`w-1.5 h-1.5 rounded-full ${accent.dot}`} />
           <h3 className="text-sm font-bold text-white tracking-wide">{currentMeta?.label}</h3>
         </div>
-        <button
-          onClick={() => copyToClipboard(formattedContent)}
-          disabled={!currentData}
-          className="p-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-800 hover:border-slate-700 text-slate-300 rounded-lg transition-all flex items-center gap-2 text-xs font-semibold"
-        >
-          {copied ? (
-            <>
-              <Check className="w-4 h-4 text-emerald-400" />
-              Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              Copy JSON
-            </>
-          )}
-        </button>
+        {!["backend", "frontend"].includes(activeTab) && (
+          <button
+            onClick={() => copyToClipboard(formattedContent)}
+            disabled={!currentData}
+            className="p-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-800 hover:border-slate-700 text-slate-300 rounded-lg transition-all flex items-center gap-2 text-xs font-semibold"
+          >
+            {copied ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-400" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                Copy JSON
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="p-6 bg-slate-950/20">
@@ -247,50 +389,16 @@ export default function ProjectOutputViewer({ projectData }) {
             </div>
             <div className="p-5 rounded-xl bg-slate-900/50 border border-slate-800/80">
               <h4 className="font-bold text-indigo-400 mb-3 text-sm tracking-wider uppercase">Migration SQL Schema</h4>
-              <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800">
+              <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800 font-semibold leading-relaxed">
                 {currentData.migration_sql}
               </pre>
             </div>
           </div>
         )}
 
-        {activeTab === "backend" && currentData && (
-          <div className="space-y-6 text-slate-300">
-            <div className="p-5 rounded-xl bg-slate-900/50 border border-slate-800/80">
-              <h4 className="font-bold text-indigo-400 mb-3 text-sm tracking-wider uppercase">Framework: {currentData.framework}</h4>
-              <div className="space-y-4">
-                <div>
-                  <span className="text-xs font-bold text-slate-500 block mb-1">main.py</span>
-                  <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800 max-h-80 overflow-y-auto">
-                    {currentData.main_file}
-                  </pre>
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-500 block mb-1">models.py</span>
-                  <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800 max-h-80 overflow-y-auto">
-                    {currentData.models_code}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === "backend" && currentData && renderFileViewer(getBackendFiles(), currentData.framework)}
 
-        {activeTab === "frontend" && currentData && (
-          <div className="space-y-6 text-slate-300">
-            <div className="p-5 rounded-xl bg-slate-900/50 border border-slate-800/80">
-              <h4 className="font-bold text-indigo-400 mb-3 text-sm tracking-wider uppercase">Framework: {currentData.framework}</h4>
-              <div className="space-y-4">
-                <div>
-                  <span className="text-xs font-bold text-slate-500 block mb-1">App.jsx</span>
-                  <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800 max-h-80 overflow-y-auto">
-                    {currentData.main_app_code}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === "frontend" && currentData && renderFileViewer(getFrontendFiles(), currentData.framework)}
 
         {activeTab === "review" && currentData && (
           <div className="space-y-6 text-slate-300">
@@ -334,7 +442,7 @@ export default function ProjectOutputViewer({ projectData }) {
 
         {currentData && !["requirements", "architecture", "database", "backend", "frontend", "review", "security"].includes(activeTab) && (
           <div className="max-h-[500px] overflow-y-auto">
-            <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800">
+            <pre className="text-xs font-mono bg-slate-950 p-4 rounded-lg overflow-x-auto text-slate-300 border border-slate-800 leading-relaxed font-semibold">
               {formattedContent}
             </pre>
           </div>

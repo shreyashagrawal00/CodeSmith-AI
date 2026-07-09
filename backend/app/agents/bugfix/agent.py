@@ -16,6 +16,7 @@ class BugfixAgent(BaseLLMAgent):
             return skip_result
         review = state.get("review_report", {})
         security = state.get("security_report", {})
+        compilation_errors = state.get("compilation_errors", "None.")
         total_issues = len(review.get("backend_issues", [])) + len(review.get("frontend_issues", [])) + len(security.get("vulnerabilities", []))
         self._emit(state, "info", "🐛 Applying bug fixes", f"{total_issues} issues to patch")
         response = self.invoke(
@@ -24,6 +25,7 @@ class BugfixAgent(BaseLLMAgent):
             inputs={
                 "review_issues": str(review.get("backend_issues", []) + review.get("frontend_issues", [])),
                 "security_issues": str(security.get("vulnerabilities", [])),
+                "compilation_errors": compilation_errors,
                 "backend_code": str(state.get("backend_code", {})),
                 "frontend_code": str(state.get("frontend_code", {})),
             },
@@ -38,7 +40,23 @@ class BugfixAgent(BaseLLMAgent):
         # schema compatibility).
         backend_code = state.get("backend_code", {}).copy()
         for edit in response.fixed_backend_files:
-            backend_code[edit.key] = edit.content
+            # Check if this key matches a path in extra_files first
+            extra_files = list(backend_code.get("extra_files") or [])
+            matched_extra = False
+            for i, extra in enumerate(extra_files):
+                extra_path = extra.get("path") if isinstance(extra, dict) else getattr(extra, "path", None)
+                if extra_path == edit.key:
+                    if isinstance(extra, dict):
+                        extra_files[i] = {"path": edit.key, "code": edit.content}
+                    else:
+                        extra.code = edit.content
+                    matched_extra = True
+                    break
+            if matched_extra:
+                backend_code["extra_files"] = extra_files
+            else:
+                # Core field (main_file, models_code, routes_code, etc.)
+                backend_code[edit.key] = edit.content
 
         frontend_code = state.get("frontend_code", {}).copy()
         components_code = list(frontend_code.get("components_code") or [])

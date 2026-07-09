@@ -14,10 +14,29 @@ class ComponentFile(BaseModel):
     code: str = Field(description="React code content for this component")
 
 
+class BackendFile(BaseModel):
+    """One extra backend file (middleware, config, additional routes, helpers,
+    etc.). Using an explicit list of (path, code) pairs instead of a raw
+    dict for the same strict-schema-compatibility reason as ComponentFile."""
+    path: str = Field(
+        description="Relative path from the backend root, e.g. 'routes/taskRoutes.js', "
+        "'middleware/authMiddleware.js', 'config/db.js', 'utils/helpers.py'. "
+        "Use forward slashes. MUST match exactly what the main file imports."
+    )
+    code: str = Field(description="Full source code content of this file.")
+
+
 class FileEdit(BaseModel):
     """One file/field correction from the bugfix agent. Same rationale as
     ComponentFile above -- replaces a raw Dict[str, str] map."""
-    key: str = Field(description="Which field this fix applies to, e.g. 'main_file', 'routes_code', 'main_app_code', 'styles_code', or a components_code filename like 'Header.jsx'")
+    key: str = Field(
+        description="Which field this fix applies to. For core backend fields use: "
+        "'main_file', 'routes_code', 'models_code', 'services_code', 'dependency_manifest', 'dockerfile'. "
+        "For extra backend files, use the relative path exactly as declared in extra_files, "
+        "e.g. 'routes/taskRoutes.js'. "
+        "For frontend fields: 'main_app_code', 'entry_point_code', 'api_client_code', "
+        "'package_json', 'dockerfile', 'styles_code', or a components_code filename like 'Header.jsx'."
+    )
     content: str = Field(description="The corrected file content")
 
 # 1. PM Agent Output Schema
@@ -50,9 +69,18 @@ class BackendCode(BaseModel):
     language: str = Field(description="Programming language for the backend, matching the tech stack exactly (e.g. 'Python', 'JavaScript', 'TypeScript', 'Java').")
     main_file: str = Field(description="Content of the main application entry file, written in the chosen language/framework's idioms and conventions.")
     main_file_name: str = Field(description="Filename for the main entry file, matching the language's convention -- e.g. 'main.py' for Python/FastAPI, 'index.js' or 'server.js' for Node.js/Express, 'main.ts' for NestJS.")
-    models_code: str = Field(description="Database models file content, using an ORM/library appropriate for the chosen language (e.g. SQLAlchemy/SQLModel for Python, Prisma/Mongoose/Sequelize/TypeORM for Node.js).")
-    routes_code: str = Field(description="API endpoints/routers file content, written in the chosen framework's idioms.")
-    services_code: str = Field(description="Business logic service functions file content.")
+    models_code: str = Field(description="Database models/schema file content. For Python use SQLAlchemy/SQLModel; for Node.js inline models here OR put them in extra_files if separate model files are needed.")
+    routes_code: str = Field(description="Primary API routes/endpoints file. Put ALL route logic here if using a single-file approach, OR use this as a router index and declare individual route files in extra_files.")
+    services_code: str = Field(description="Business logic / service layer file content.")
+    extra_files: List[BackendFile] = Field(
+        default=[],
+        description="Additional backend files needed to make the project work -- e.g. "
+        "'middleware/authMiddleware.js', 'routes/userRoutes.js', 'routes/taskRoutes.js', "
+        "'config/db.js', 'utils/helpers.py', '.env.example'. "
+        "CRITICAL: Every file that main_file, routes_code, or services_code imports "
+        "from a sub-path (e.g. require('./middleware/auth')) MUST appear here with the "
+        "matching relative path so it actually exists on disk."
+    )
     dependency_manifest: str = Field(description="Dependency manifest file content, matching the chosen language -- e.g. requirements.txt content for Python, package.json content for Node.js.")
     dependency_manifest_name: str = Field(description="Filename for the dependency manifest, matching the language convention -- e.g. 'requirements.txt' for Python, 'package.json' for Node.js.")
     dockerfile: str = Field(description="Dockerfile for backend containerization, appropriate for the chosen language/runtime.")

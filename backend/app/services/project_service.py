@@ -104,6 +104,25 @@ def write_project_files(job_id: str, state: dict):
         (be_dir / f"routes{ext}").write_text(backend_code["routes_code"], encoding="utf-8")
     if backend_code.get("services_code"):
         (be_dir / f"services{ext}").write_text(backend_code["services_code"], encoding="utf-8")
+
+    # Extra backend files (middleware, sub-route files, config, utils, etc.)
+    # Each entry has a relative `path` (e.g. "routes/taskRoutes.js") and `code`.
+    # We create the parent directories automatically so imports resolve correctly.
+    extra_files = backend_code.get("extra_files") or []
+    for extra in extra_files:
+        # Support both dict (from state JSON) and BackendFile model instances
+        file_path = extra.get("path") if isinstance(extra, dict) else getattr(extra, "path", None)
+        file_code = extra.get("code") if isinstance(extra, dict) else getattr(extra, "code", None)
+        if not file_path or not file_code:
+            continue
+        # Sanitize: strip leading slashes, block path traversal
+        safe_path = Path(file_path.lstrip("/").lstrip("\\"))
+        if ".." in safe_path.parts:
+            continue
+        dest = be_dir / safe_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(file_code, encoding="utf-8")
+
     dependency_manifest_name = backend_code.get("dependency_manifest_name") or "requirements.txt"
     if backend_code.get("dependency_manifest"):
         (be_dir / dependency_manifest_name).write_text(backend_code["dependency_manifest"], encoding="utf-8")
@@ -116,8 +135,11 @@ def write_project_files(job_id: str, state: dict):
     src_dir = fe_dir / "src"
     src_dir.mkdir(exist_ok=True)
 
+    main_app_file_name = frontend_code.get("main_app_file_name") or "App.jsx"
     if frontend_code.get("main_app_code"):
-        (src_dir / "App.jsx").write_text(frontend_code["main_app_code"], encoding="utf-8")
+        (src_dir / main_app_file_name).write_text(frontend_code["main_app_code"], encoding="utf-8")
+    # Always write api client as api.js so imports like `import { ... } from './api'`
+    # always resolve. If the LLM also named it something else, write both so either works.
     if frontend_code.get("api_client_code"):
         (src_dir / "api.js").write_text(frontend_code["api_client_code"], encoding="utf-8")
     if frontend_code.get("package_json"):
@@ -177,7 +199,7 @@ def write_project_files(job_id: str, state: dict):
                 (src_dir / entry_file_name).write_text(
                     "import React from 'react';\n"
                     "import ReactDOM from 'react-dom/client';\n"
-                    "import App from './App.jsx';\n"
+                    f"import App from './{main_app_file_name}';\n"
                     + ("import './index.css';\n" if has_css else "")
                     + "\n"
                     "ReactDOM.createRoot(document.getElementById('root')).render(\n"
@@ -260,3 +282,80 @@ def write_project_files(job_id: str, state: dict):
     (project_dir / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
     return str(project_dir)
+
+
+def validate_project_build(job_id: str, project_dir: str) -> dict:
+    """Run real build tools to check if the generated project compiles.
+    Returns a dict with 'backend_errors' and 'frontend_errors' keys (strings).
+    """
+    import subprocess
+    from app.services.preview_service import _normalize_frontend_package_json
+
+    results = {"backend_errors": "", "frontend_errors": ""}
+
+    # 1. Frontend validation
+    fe_dir = os.path.join(project_dir, "frontend")
+    if os.path.exists(fe_dir) and os.path.exists(os.path.join(fe_dir, "package.json")):
+        npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
+        # Normalize package.json first
+        _normalize_frontend_package_json(fe_dir)
+
+        # Run npm install (fast if already installed)
+        try:
+            proc = subprocess.run(
+                [npm_cmd, "install"],
+                cwd=fe_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=90,
+                text=True,
+            )
+            if proc.returncode != 0:
+                # If install failed, try with legacy peer deps
+                proc = subprocess.run(
+                    [npm_cmd, "install", "--legacy-peer-deps"],
+                    cwd=fe_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=90,
+                    text=True,
+                )
+            if proc.returncode != 0:
+                results["frontend_errors"] = f"npm install failed:\n{proc.stdout[-1500:]}"
+        except Exception as e:
+            results["frontend_errors"] = f"npm install failed to execute: {str(e)}"
+
+        # Run npm run build if install succeeded
+        if not results["frontend_errors"]:
+            try:
+                build_proc = subprocess.run(
+                    [npm_cmd, "run", "build"],
+                    cwd=fe_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=90,
+                    text=True,
+                )
+                if build_proc.returncode != 0:
+                    results["frontend_errors"] = f"Build failed (npm run build):\n{build_proc.stdout[-2500:]}"
+            except Exception as e:
+                results["frontend_errors"] = f"Build execution failed: {str(e)}"
+
+    # 2. Backend validation (Syntax check)
+    be_dir = os.path.join(project_dir, "backend")
+    if os.path.exists(be_dir):
+        # Find Python files and check syntax
+        py_files = [f for f in os.listdir(be_dir) if f.endswith(".py")]
+        if py_files:
+            import py_compile
+            syntax_errors = []
+            for py_file in py_files:
+                path = os.path.join(be_dir, py_file)
+                try:
+                    py_compile.compile(path, doraise=True)
+                except py_compile.PyCompileError as e:
+                    syntax_errors.append(f"Syntax error in {py_file}:\n{str(e)}")
+            if syntax_errors:
+                results["backend_errors"] = "\n".join(syntax_errors)
+
+    return results

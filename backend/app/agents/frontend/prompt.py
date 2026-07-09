@@ -17,6 +17,15 @@ CRITICAL RULES for the package.json you generate:
 - Do NOT include "react-scripts" anywhere in the package.json.
 - Use "type": "module" in the package.json.
 
+CRITICAL RULES for imports and file naming:
+- The API client file is saved on disk as `api.js` inside src/. ALL components that call the
+  backend MUST import it as `import { ... } from './api'` or `import { ... } from '../api'`
+  (NOT as 'apiClient', 'client', 'services', or any other name).
+- Component files live in src/components/. Import them as `import X from './components/X'`
+  from App.jsx, or as `import X from './X'` if importing within the components/ folder itself.
+- Every import path you write MUST match the actual file structure that will be on disk.
+- Do NOT import from paths that don't correspond to any file you are providing.
+
 The entry point must be main.jsx (or main.tsx for TypeScript) that mounts App into <div id="root">.
 Include App component, key page components, API client (using fetch or axios), and a Dockerfile.
 Use React with modern hooks and clean, responsive design.

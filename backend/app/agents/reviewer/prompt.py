@@ -28,6 +28,9 @@ Backend Code:
 
 Frontend Code:
 {frontend_code}
+
+Actual Compiler/Build Errors (if any):
+{compilation_errors}
             """,
         ),
     ]
