@@ -50,7 +50,7 @@ graph TD
     Join --> Rev[6. Reviewer / Compiler]:::check
 
     %% Self-Correction Loop
-    subgraph Self-Correction Loop (Up to 3 Runs)
+    subgraph loop ["Self-Correction Loop (Up to 3 Runs)"]
         Rev -->|Build Error / Anti-Pattern| BF[9. Bug Fixer]:::check
         BF -->|Re-Compile & Validate| Rev
     end
