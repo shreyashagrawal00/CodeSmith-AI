@@ -251,3 +251,64 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = str(e)
         crud.update_project(job_id, _jobs[job_id])
+
+
+async def run_manual_fix(job_id: str, feedback: str):
+    """Manually trigger the BugFixer agent to patch code issues after workflow completion."""
+    job = get_job(job_id)
+    if job is None:
+        return
+
+    try:
+        # Reset logs and status so UI shows active state
+        job["status"] = "running"
+        job["current_agent"] = "BugFixer"
+        job["live_log"] = []
+        crud.update_project(job_id, job)
+
+        from app.agents.bugfix.agent import BugfixAgent
+
+        # Construct ProjectState representation for the Agent invocation
+        state: ProjectState = {
+            "job_id": job_id,
+            "backend_code": job.get("backend_code", {}),
+            "frontend_code": job.get("frontend_code", {}),
+            "review_report": job.get("review_report", {}),
+            "security_report": job.get("security_report", {}),
+            "compilation_errors": feedback,
+            "correction_iterations": job.get("correction_iterations", 0),
+            "log": job.get("log", []),
+            "live_log": [],
+        }
+
+        # Run Bugfix Agent (blocks thread, run via to_thread)
+        agent = BugfixAgent()
+        result = await asyncio.to_thread(agent.run, state)
+
+        # Merge the result back into our job representation
+        # result contains backend_code, frontend_code, correction_iterations, bugfix_report
+        job.update(result)
+        job["status"] = "completed"
+
+        # Write files, update zip and restart preview
+        from app.services.project_service import write_project_files
+        from app.services.report_service import zip_project
+        from app.services.preview_service import start_preview
+
+        project_dir = write_project_files(job_id, job)
+        zip_project(job_id)
+        preview_res = start_preview(job_id, project_dir)
+        job["preview"] = {
+            "frontend_url": preview_res.get("frontend_url"),
+            "backend_url": preview_res.get("backend_url"),
+            "backend_error": preview_res.get("backend_error"),
+            "frontend_error": preview_res.get("frontend_error"),
+            "error": preview_res.get("error"),
+        }
+
+        crud.update_project(job_id, job)
+
+    except Exception as e:
+        job["status"] = "failed"
+        job["error"] = str(e)
+        crud.update_project(job_id, job)

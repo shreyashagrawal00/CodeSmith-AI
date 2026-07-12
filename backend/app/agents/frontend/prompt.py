@@ -19,7 +19,7 @@ CRITICAL RULES for the package.json you generate:
 
 CRITICAL RULES for imports and file naming:
 - The API client file is saved on disk as `api.js` inside src/. ALL components that call the
-  backend MUST import it as `import { ... } from './api'` or `import { ... } from '../api'`
+  backend MUST import it as `import {{ ... }} from './api'` or `import {{ ... }} from '../api'`
   (NOT as 'apiClient', 'client', 'services', or any other name).
 - Component files live in src/components/. Import them as `import X from './components/X'`
   from App.jsx, or as `import X from './X'` if importing within the components/ folder itself.

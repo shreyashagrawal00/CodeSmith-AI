@@ -27,7 +27,7 @@ export default function App() {
 
   const handleSkip = async (agentId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/skip/${jobId}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/skip/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent: agentId }),
@@ -57,7 +57,7 @@ export default function App() {
     setSubmitLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/approve/${jobId}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/approve/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approved, feedback }),
@@ -123,7 +123,7 @@ export default function App() {
     setError(null);
     setProjectData(null);
     try {
-      const response = await fetch("http://localhost:8000/api/v1/generate", {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
@@ -141,7 +141,7 @@ export default function App() {
 
   const fetchResult = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/result/${jobId}`);
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/result/${jobId}`);
       if (!response.ok) return; // e.g. job just flipped to "failed" mid-poll; the status poller already surfaces that error
       const data = await response.json();
       setProjectData(data);
@@ -155,7 +155,7 @@ export default function App() {
   const startPolling = useCallback(() => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/status/${jobId}`);
+        const response = await fetch(`http://127.0.0.1:8000/api/v1/status/${jobId}`);
         const data = await response.json();
         setStatus(data.status);
         setCurrentAgent(data.current_agent);
@@ -185,7 +185,7 @@ export default function App() {
 
     let socket;
     try {
-      socket = new WebSocket(`ws://localhost:8000/ws/${jobId}`);
+      socket = new WebSocket(`ws://127.0.0.1:8000/ws/${jobId}`);
       
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -235,7 +235,30 @@ export default function App() {
   }, [jobId, status, startPolling, fetchResult]);
 
   const handleDownload = () => {
-    window.open(`http://localhost:8000/api/v1/download/${jobId}`);
+    window.open(`http://127.0.0.1:8000/api/v1/download/${jobId}`);
+  };
+
+  const handleManualFix = async () => {
+    setSubmitLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/fix-job/${jobId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approved: false, feedback }),
+      });
+      const data = await response.json();
+      if (data.status === "running") {
+        setStatus("running");
+        setFeedback("");
+      } else {
+        setError(data.message || "Failed to start bug fixer.");
+      }
+    } catch {
+      setError("Failed to connect to backend to start bug fixer.");
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const resetFlow = () => {
@@ -442,9 +465,35 @@ export default function App() {
                     src={projectData.preview.frontend_url}
                     title="Live App Preview"
                     className="w-full h-full border-none bg-slate-950"
-                    sandbox="allow-scripts allow-same-origin allow-forms"
                   />
                 </div>
+              </div>
+            )}
+
+            {status === "completed" && (
+              <div className="w-full max-w-6xl p-6 bg-slate-900/20 border border-slate-800/80 rounded-2xl space-y-4 shadow-lg shadow-indigo-500/5 relative z-10">
+                <div className="flex items-center gap-3">
+                  <span className="w-3.5 h-3.5 rounded-full bg-indigo-500" />
+                  <h3 className="text-lg font-bold text-white">
+                    Need revisions or found a bug?
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-400">
+                  Describe any issues, runtime errors, or changes you'd like to make. The Bug Fixer agent will automatically attempt to patch the code.
+                </p>
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="e.g., The app crashed with 'Failed to resolve import prop-types', please fix the import and add it to package.json..."
+                  className="w-full h-24 bg-slate-950 border border-slate-800 focus:border-indigo-500/50 rounded-xl p-4 text-sm text-slate-200 placeholder-slate-600 outline-none transition-all resize-none"
+                />
+                <button
+                  disabled={submitLoading || !feedback.trim()}
+                  onClick={handleManualFix}
+                  className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all duration-300 shadow-md shadow-indigo-500/10 hover:scale-[1.01] cursor-pointer text-sm"
+                >
+                  {submitLoading ? "Running Bug Fixer..." : "Run Bug Fixer"}
+                </button>
               </div>
             )}
 

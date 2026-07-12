@@ -179,6 +179,18 @@ def write_project_files(job_id: str, state: dict):
             safe_name = Path(filename).name or "component.jsx"
             (components_dir / safe_name).write_text(code, encoding="utf-8")
 
+    # Write any extra files in frontend_code (e.g. added by BugFixer agent)
+    known_fe_keys = {
+        "framework", "main_app_code", "main_app_file_name", "components_code",
+        "api_client_code", "package_json", "dockerfile", "styles_code",
+        "entry_point_code", "entry_point_file_name", "index_html"
+    }
+    for key, value in frontend_code.items():
+        if key not in known_fe_keys and isinstance(value, str) and (key.endswith(".js") or key.endswith(".jsx") or key.endswith(".ts") or key.endswith(".tsx") or key.endswith(".css")):
+            # Guard against path traversal
+            safe_name = Path(key).name
+            (src_dir / safe_name).write_text(value, encoding="utf-8")
+
     # Static Vite boilerplate: the LLM-generated FrontendCode schema only
     # produces App.jsx/api.js/styles/package.json. We also write index.html,
     # main.jsx, and vite.config.js if the LLM didn't provide them, so

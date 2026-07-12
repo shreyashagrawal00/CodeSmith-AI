@@ -29,7 +29,7 @@ If the main file or routes file contains ANY import like:
   - require('./middleware/authMiddleware')
   - require('./config/db')
   - from .utils import helpers
-  - import { something } from './validators/schema'
+  - import {{ something }} from './validators/schema'
 
 Then that file MUST appear in extra_files with a matching `path` field.
 Example: if main.js has `require('./middleware/authMiddleware')`, then extra_files

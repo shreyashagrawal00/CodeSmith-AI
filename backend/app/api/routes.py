@@ -120,3 +120,15 @@ async def get_projects(limit: int = 50):
     backend/codesmith.db instead.
     """
     return {"projects": list_projects(limit=limit)}
+
+
+@router.post("/fix-job/{job_id}")
+async def fix_job(job_id: str, request: ApprovalRequest, background_tasks: BackgroundTasks):
+    """Trigger the BugFixer agent to run again on a completed job to address issues."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    from app.services.workflow_service import run_manual_fix
+    background_tasks.add_task(run_manual_fix, job_id, request.feedback)
+    return {"status": "running", "message": "CodeSmith AI is running the BugFixer to patch the issues..."}
