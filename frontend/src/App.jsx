@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Terminal, Download, Cpu, RefreshCw, ExternalLink, Globe } from "lucide-react";
+import { Terminal, Download, Cpu, RefreshCw, ExternalLink, Globe, FolderOpen, Plus } from "lucide-react";
 import ProjectForm from "./components/ProjectForm";
 import ProgressBar from "./components/ProgressBar";
 import ProjectOutputViewer from "./components/ProjectOutputViewer";
 import LiveTerminal from "./components/LiveTerminal";
+import ProjectsDashboard from "./components/ProjectsDashboard";
 
 const AUTO_PROCEED_SECONDS = 10;
 
@@ -20,6 +21,7 @@ export default function App() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [autoProceedSeconds, setAutoProceedSeconds] = useState(null);
   const [autoProceedCancelled, setAutoProceedCancelled] = useState(false);
+  const [view, setView] = useState("generator"); // "generator" | "projects"
   // Refs mirror the state above so the interval callback always sees the
   // latest value rather than a stale closure from when the interval was set up.
   const autoProceedCancelledRef = useRef(false);
@@ -275,7 +277,30 @@ export default function App() {
     setAutoProceedSeconds(null);
     setAutoProceedCancelled(false);
     autoProceedCancelledRef.current = false;
+    setView("generator");
   };
+
+  // Load a past project by job_id from the dashboard
+  const openProject = useCallback(async (pastJobId) => {
+    setView("generator");
+    setError(null);
+    setProjectData(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/result/${pastJobId}`);
+      if (!res.ok) throw new Error("Could not load project result.");
+      const data = await res.json();
+      setJobId(pastJobId);
+      setStatus(data.status || "completed");
+      setCurrentAgent(data.current_agent || "");
+      setLog(data.log || []);
+      setProjectData(data);
+    } catch (e) {
+      setError(e.message || "Failed to open project.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return (
     <div className="relative min-h-screen bg-[#030408] text-slate-100 overflow-hidden flex flex-col">
@@ -297,8 +322,20 @@ export default function App() {
             <p className="text-xs text-slate-500 font-medium">Autonomous Multi-Agent Software Team</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          {jobId && (
+        <div className="flex items-center gap-3">
+          {/* My Projects tab */}
+          <button
+            onClick={() => setView(view === "projects" ? "generator" : "projects")}
+            className={`flex items-center gap-2 px-4 py-2 border text-xs font-semibold rounded-lg transition-all ${
+              view === "projects"
+                ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-500/20"
+                : "bg-slate-900 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-300"
+            }`}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            My Projects
+          </button>
+          {view === "generator" && jobId && (
             <button
               onClick={resetFlow}
               className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all"
@@ -307,27 +344,44 @@ export default function App() {
               New Project
             </button>
           )}
+          {view === "projects" && (
+            <button
+              onClick={() => { setView("generator"); resetFlow(); }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Project
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main Body */}
       <main className="flex-1 relative z-10 max-w-7xl mx-auto w-full px-6 py-12 flex flex-col items-center justify-center gap-12">
-        {status === "idle" && (
-          <div className="text-center space-y-4 max-w-2xl animate-fade-in">
-            <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
-              An entire software team in <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-rose-400 bg-clip-text text-transparent">one prompt.</span>
-            </h2>
-            <p className="text-base text-slate-400 font-medium max-w-lg mx-auto">
-              Transform your idea into a complete production-ready project: full backend APIs, database schemas, responsive React pages, security audits, tests, Docker, and CI/CD pipelines.
-            </p>
-          </div>
+        {/* Projects Dashboard View */}
+        {view === "projects" && (
+          <ProjectsDashboard onOpenProject={openProject} />
         )}
 
-        {status === "idle" && (
-          <ProjectForm onSubmit={startGeneration} loading={loading} />
-        )}
+        {/* Generator View */}
+        {view === "generator" && (
+          <>
+            {status === "idle" && (
+              <div className="text-center space-y-4 max-w-2xl animate-fade-in">
+                <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
+                  An entire software team in <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-rose-400 bg-clip-text text-transparent">one prompt.</span>
+                </h2>
+                <p className="text-base text-slate-400 font-medium max-w-lg mx-auto">
+                  Transform your idea into a complete production-ready project: full backend APIs, database schemas, responsive React pages, security audits, tests, Docker, and CI/CD pipelines.
+                </p>
+              </div>
+            )}
 
-        {status !== "idle" && (
+            {status === "idle" && (
+              <ProjectForm onSubmit={startGeneration} loading={loading} />
+            )}
+
+            {status !== "idle" && (
           <>
             <ProgressBar currentAgent={currentAgent} log={log} status={status} jobId={jobId} onSkip={handleSkip} />
             
@@ -499,6 +553,8 @@ export default function App() {
 
             <ProjectOutputViewer projectData={projectData} />
           </div>
+        )}
+          </>
         )}
       </main>
 

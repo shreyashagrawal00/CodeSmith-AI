@@ -132,3 +132,44 @@ def list_projects(limit: int = 50) -> list[dict]:
         ]
     finally:
         db.close()
+
+
+def delete_project(job_id: str) -> bool:
+    """Delete a project: removes the DB row, generated files on disk, and the
+    ZIP archive.  Returns True if a row was found and deleted, False if not found.
+    Never raises -- file-system errors are logged and ignored so the DB row is
+    always cleaned up even if the files are already gone.
+    """
+    import shutil
+    from pathlib import Path
+
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.job_id == job_id).first()
+        if project is None:
+            return False
+        db.delete(project)
+        db.commit()
+    except Exception:
+        logger.exception("Failed to delete project row for job %s", job_id)
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+    # Best-effort cleanup of generated files
+    base = Path(__file__).resolve().parents[2] / "generated_projects"
+    project_dir = base / job_id
+    zip_file = base / f"{job_id}.zip"
+    try:
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+    except Exception:
+        logger.warning("Could not remove project directory %s", project_dir)
+    try:
+        if zip_file.exists():
+            zip_file.unlink()
+    except Exception:
+        logger.warning("Could not remove zip file %s", zip_file)
+
+    return True

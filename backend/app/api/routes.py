@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow, list_projects, request_skip
+from app.services.workflow_service import create_job, get_job, run_workflow, resume_workflow, list_projects, request_skip, delete_project
 
 router = APIRouter()
 
@@ -120,6 +120,15 @@ async def get_projects(limit: int = 50):
     backend/codesmith.db instead.
     """
     return {"projects": list_projects(limit=limit)}
+
+
+@router.delete("/projects/{job_id}")
+async def delete_project_route(job_id: str):
+    """Delete a project: removes the DB row, generated files, and cache."""
+    success = delete_project(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "ok", "message": "Project deleted successfully"}
 
 
 @router.post("/fix-job/{job_id}")

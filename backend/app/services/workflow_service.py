@@ -64,6 +64,15 @@ def list_projects(limit: int = 50) -> list[dict]:
     return crud.list_projects(limit=limit)
 
 
+def delete_project(job_id: str) -> bool:
+    """Delete a project: removes the DB row, generated files, and the zip archive.
+    Also removes the job from the in-memory cache if present.
+    """
+    if job_id in _jobs:
+        del _jobs[job_id]
+    return crud.delete_project(job_id)
+
+
 def request_skip(job_id: str, agent_id: str) -> bool:
     """Mark an agent to be skipped the next time it would run.
 
