@@ -30,7 +30,7 @@ CRITICAL RULES for imports and file naming:
 CRITICAL RULES for React Router:
 - You MUST always define a root route ("/") in your App component.
 - If the app has authentication (login/register), the root route MUST redirect to the primary entry page
-  using React Router's <Navigate> component: `<Route path="/" element={<Navigate to="/login" replace />} />`
+  using React Router's <Navigate> component: `<Route path="/" element={{<Navigate to="/login" replace />}} />`
   (or to whatever the main landing page is, e.g. /dashboard, /home, /todo-list, etc.)
 - NEVER leave the root path "/" without a matching route — doing so makes the app a blank white screen.
 - Import Navigate from 'react-router-dom' wherever you use it.
