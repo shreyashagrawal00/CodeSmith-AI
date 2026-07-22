@@ -41,6 +41,7 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
             <span className={`text-sm px-3 py-1 rounded-full uppercase tracking-wider font-semibold ${
               status === "completed" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" :
               status === "failed" ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
+              status === "paused" ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
               "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 animate-pulse"
             }`}>
               {status}
@@ -48,12 +49,16 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
           </h2>
           <p className="text-sm text-slate-400 mt-1">
             {status === "completed" ? "Generation finished successfully!" : 
-             status === "failed" ? "An error occurred during build." : 
+             status === "failed" ? "An error occurred during build." :
+             status === "paused" ? "Paused — awaiting human review." :
              `Currently running: ${currentAgent || "PM"}`}
           </p>
         </div>
         {status === "running" && (
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+        )}
+        {status === "paused" && (
+          <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
         )}
       </div>
 

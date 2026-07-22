@@ -205,11 +205,14 @@ export default function App() {
           // transitions; while running, status is already "running" from
           // when the job started/resumed, so there's nothing to update here.
           setLog((prev) => {
-            const exists = prev.some((e) => e.agent === data.agent);
-            if (!exists) {
+            const idx = prev.findIndex((e) => e.agent === data.agent);
+            if (idx === -1) {
               return [...prev, { agent: data.agent, status: data.status }];
             }
-            return prev;
+            // Update status for agents that re-run (e.g. PM after rejection)
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], status: data.status };
+            return updated;
           });
         } else if (data.type === "live") {
           setLiveEvents((prev) => [...prev, data]);
@@ -390,7 +393,7 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <span className="w-3.5 h-3.5 rounded-full bg-amber-500 animate-pulse" />
                   <h3 className="text-lg font-bold text-white">
-                    Human Review Required — Paused at {currentAgent === "approval_gate" ? "Requirements & Architecture" : currentAgent === "database_designer" ? "Database Design" : currentAgent === "deployment" ? "Deployment Review" : currentAgent}
+                    Human Review Required — Paused at {currentAgent === "approval_gate" ? "Requirements & Architecture" : currentAgent === "database_approval_gate" ? "Database Design" : currentAgent === "deployment" ? "Deployment Review" : currentAgent}
                   </h3>
                 </div>
                 <p className="text-sm text-slate-400">

@@ -144,7 +144,19 @@ async def run_workflow(job_id: str):
         async for state_chunk in graph.astream(initial_state, config=config, stream_mode="values"):
             job = _jobs.get(job_id)
             if job is not None:
-                job.update(state_chunk)
+                # Merge state content but protect status — state_chunk always
+                # carries status="running" from the initial state, which would
+                # overwrite a "paused" transition set after astream stops.
+                for k, v in state_chunk.items():
+                    if k == "status":
+                        continue  # never let the graph overwrite our status
+                    elif k in ("log", "live_log"):
+                        # These are Annotated[list, operator.add] in the graph —
+                        # state_chunk contains the full accumulated list (LangGraph
+                        # applies the reducer before yielding), so just replace.
+                        job[k] = v
+                    else:
+                        job[k] = v
                 crud.update_project(job_id, job)
 
         # Check if the graph is paused at an interrupt or has finished
@@ -217,7 +229,11 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         async for state_chunk in graph.astream(None, config=config, stream_mode="values"):
             job = _jobs.get(job_id)
             if job is not None:
-                job.update(state_chunk)
+                for k, v in state_chunk.items():
+                    if k == "status":
+                        continue
+                    else:
+                        job[k] = v
                 crud.update_project(job_id, job)
 
         # Check if the graph is paused at another interrupt or has finished
