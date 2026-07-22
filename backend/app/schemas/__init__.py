@@ -69,9 +69,9 @@ class BackendCode(BaseModel):
     language: str = Field(description="Programming language for the backend, matching the tech stack exactly (e.g. 'Python', 'JavaScript', 'TypeScript', 'Java').")
     main_file: str = Field(description="Content of the main application entry file, written in the chosen language/framework's idioms and conventions.")
     main_file_name: str = Field(description="Filename for the main entry file, matching the language's convention -- e.g. 'main.py' for Python/FastAPI, 'index.js' or 'server.js' for Node.js/Express, 'main.ts' for NestJS.")
-    models_code: str = Field(description="Database models/schema file content. For Python use SQLAlchemy/SQLModel; for Node.js inline models here OR put them in extra_files if separate model files are needed.")
-    routes_code: str = Field(description="Primary API routes/endpoints file. Put ALL route logic here if using a single-file approach, OR use this as a router index and declare individual route files in extra_files.")
-    services_code: str = Field(description="Business logic / service layer file content.")
+    models_code: str = Field(default="", description="Database models/schema file content. For Python use SQLAlchemy/SQLModel; for Node.js inline models here OR put them in extra_files if separate model files are needed.")
+    routes_code: str = Field(default="", description="Primary API routes/endpoints file. Put ALL route logic here if using a single-file approach, OR use this as a router index and declare individual route files in extra_files.")
+    services_code: str = Field(default="", description="Business logic / service layer file content.")
     extra_files: List[BackendFile] = Field(
         default=[],
         description="Additional backend files needed to make the project work -- e.g. "
@@ -81,9 +81,9 @@ class BackendCode(BaseModel):
         "from a sub-path (e.g. require('./middleware/auth')) MUST appear here with the "
         "matching relative path so it actually exists on disk."
     )
-    dependency_manifest: str = Field(description="Dependency manifest file content, matching the chosen language -- e.g. requirements.txt content for Python, package.json content for Node.js.")
-    dependency_manifest_name: str = Field(description="Filename for the dependency manifest, matching the language convention -- e.g. 'requirements.txt' for Python, 'package.json' for Node.js.")
-    dockerfile: str = Field(description="Dockerfile for backend containerization, appropriate for the chosen language/runtime.")
+    dependency_manifest: str = Field(default="", description="Dependency manifest file content, matching the chosen language -- e.g. requirements.txt content for Python, package.json content for Node.js.")
+    dependency_manifest_name: str = Field(default="", description="Filename for the dependency manifest, matching the language convention -- e.g. 'requirements.txt' for Python, 'package.json' for Node.js.")
+    dockerfile: str = Field(default="", description="Dockerfile for backend containerization, appropriate for the chosen language/runtime.")
 
 # 5. Frontend Developer Agent Output Schema
 class FrontendCode(BaseModel):
@@ -91,9 +91,9 @@ class FrontendCode(BaseModel):
     main_app_code: str = Field(description="Content of the main application component/entry file, written in the chosen framework's idioms (e.g. App.jsx for React, App.vue for Vue, App.svelte for Svelte).")
     main_app_file_name: str = Field(description="Filename for the main app component, matching the framework convention -- e.g. 'App.jsx' for React, 'App.vue' for Vue, 'App.svelte' for Svelte.")
     components_code: List[ComponentFile] = Field(default=[], description="List of component files (filename + code), using the chosen framework's file extension (e.g. .jsx for React, .vue for Vue, .svelte for Svelte).")
-    api_client_code: str = Field(description="HTTP client integration with the backend (e.g. Axios/Fetch), written in the chosen framework's conventions.")
+    api_client_code: str = Field(default="", description="HTTP client integration with the backend (e.g. Axios/Fetch), written in the chosen framework's conventions.")
     package_json: str = Field(description="package.json manifest code with dependencies matching the chosen framework, including a 'dev' (or 'start'/'serve') script to run a local dev server.")
-    dockerfile: str = Field(description="Dockerfile for frontend containerization.")
+    dockerfile: str = Field(default="", description="Dockerfile for frontend containerization.")
     styles_code: str = Field(description="Main stylesheet code (CSS/SCSS/Tailwind) for the application.")
     entry_point_code: str = Field(default="", description="Content of the JS/TS entry file that bootstraps/mounts the app into the DOM under a Vite-style workflow (e.g. main.jsx for React+Vite, main.js for Vue+Vite, main.ts for Svelte+Vite). Required for React/Vue/Svelte/vanilla-via-Vite; leave blank only for frameworks with a fundamentally different build tool (e.g. Angular CLI).")
     entry_point_file_name: str = Field(default="", description="Filename for the entry point file, e.g. 'main.jsx', 'main.js', 'main.ts'.")
