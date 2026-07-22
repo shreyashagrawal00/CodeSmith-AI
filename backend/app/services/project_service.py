@@ -84,50 +84,47 @@ def write_project_files(job_id: str, state: dict):
     db = state.get("database_schema", {})
 
     # Backend files
-    be_dir = project_dir / "backend"
-    be_dir.mkdir(exist_ok=True)
+    is_no_backend = (
+        backend_code.get("framework") in ("None", "none", None)
+        or backend_code.get("main_file_name") in ("none", "", None)
+        or not backend_code.get("main_file")
+        or str(backend_code.get("main_file", "")).startswith("# No backend required")
+    )
 
-    # Use whatever filename/extension the AI actually specified for the
-    # main file (e.g. 'main.py' for FastAPI, 'index.js' for Express) --
-    # previously this was hardcoded to main.py/requirements.txt/models.py/
-    # etc. regardless of the requested language, so asking for a Node.js
-    # backend still produced Python filenames (and a broken preview, since
-    # preview_service tried to `pip install` a package.json).
-    main_file_name = backend_code.get("main_file_name") or "main.py"
-    ext = Path(main_file_name).suffix or ".py"
+    if not is_no_backend:
+        be_dir = project_dir / "backend"
+        be_dir.mkdir(exist_ok=True)
 
-    if backend_code.get("main_file"):
-        (be_dir / main_file_name).write_text(backend_code["main_file"], encoding="utf-8")
-    if backend_code.get("models_code"):
-        (be_dir / f"models{ext}").write_text(backend_code["models_code"], encoding="utf-8")
-    if backend_code.get("routes_code"):
-        (be_dir / f"routes{ext}").write_text(backend_code["routes_code"], encoding="utf-8")
-    if backend_code.get("services_code"):
-        (be_dir / f"services{ext}").write_text(backend_code["services_code"], encoding="utf-8")
+        main_file_name = backend_code.get("main_file_name") or "main.py"
+        ext = Path(main_file_name).suffix or ".py"
 
-    # Extra backend files (middleware, sub-route files, config, utils, etc.)
-    # Each entry has a relative `path` (e.g. "routes/taskRoutes.js") and `code`.
-    # We create the parent directories automatically so imports resolve correctly.
-    extra_files = backend_code.get("extra_files") or []
-    for extra in extra_files:
-        # Support both dict (from state JSON) and BackendFile model instances
-        file_path = extra.get("path") if isinstance(extra, dict) else getattr(extra, "path", None)
-        file_code = extra.get("code") if isinstance(extra, dict) else getattr(extra, "code", None)
-        if not file_path or not file_code:
-            continue
-        # Sanitize: strip leading slashes, block path traversal
-        safe_path = Path(file_path.lstrip("/").lstrip("\\"))
-        if ".." in safe_path.parts:
-            continue
-        dest = be_dir / safe_path
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(file_code, encoding="utf-8")
+        if backend_code.get("main_file"):
+            (be_dir / main_file_name).write_text(backend_code["main_file"], encoding="utf-8")
+        if backend_code.get("models_code"):
+            (be_dir / f"models{ext}").write_text(backend_code["models_code"], encoding="utf-8")
+        if backend_code.get("routes_code"):
+            (be_dir / f"routes{ext}").write_text(backend_code["routes_code"], encoding="utf-8")
+        if backend_code.get("services_code"):
+            (be_dir / f"services{ext}").write_text(backend_code["services_code"], encoding="utf-8")
 
-    dependency_manifest_name = backend_code.get("dependency_manifest_name") or "requirements.txt"
-    if backend_code.get("dependency_manifest"):
-        (be_dir / dependency_manifest_name).write_text(backend_code["dependency_manifest"], encoding="utf-8")
-    if backend_code.get("dockerfile"):
-        (be_dir / "Dockerfile").write_text(backend_code["dockerfile"], encoding="utf-8")
+        extra_files = backend_code.get("extra_files") or []
+        for extra in extra_files:
+            file_path = extra.get("path") if isinstance(extra, dict) else getattr(extra, "path", None)
+            file_code = extra.get("code") if isinstance(extra, dict) else getattr(extra, "code", None)
+            if not file_path or not file_code:
+                continue
+            safe_path = Path(file_path.lstrip("/").lstrip("\\"))
+            if ".." in safe_path.parts:
+                continue
+            dest = be_dir / safe_path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(file_code, encoding="utf-8")
+
+        dependency_manifest_name = backend_code.get("dependency_manifest_name") or "requirements.txt"
+        if backend_code.get("dependency_manifest"):
+            (be_dir / dependency_manifest_name).write_text(backend_code["dependency_manifest"], encoding="utf-8")
+        if backend_code.get("dockerfile"):
+            (be_dir / "Dockerfile").write_text(backend_code["dockerfile"], encoding="utf-8")
 
     # Frontend files
     fe_dir = project_dir / "frontend"
@@ -200,13 +197,27 @@ def write_project_files(job_id: str, state: dict):
     # entry_point_code/entry_point_file_name/index_html), so framework-specific
     # scaffolding (e.g. Vue/Svelte) is respected.
     if frontend_code.get("main_app_code"):
-        entry_file_name = frontend_code.get("entry_point_file_name") or "main.jsx"
+        framework_str = str(frontend_code.get("framework", "")).lower()
+        is_vanilla = (
+            "vanilla" in framework_str
+            or "html" in framework_str
+            or "javascript" in framework_str and "react" not in framework_str
+            or not (main_app_file_name.endswith(".jsx") or main_app_file_name.endswith(".tsx"))
+        )
+
+        entry_file_name = frontend_code.get("entry_point_file_name") or ("main.js" if is_vanilla else "main.jsx")
         entry_code = frontend_code.get("entry_point_code")
         has_css = bool(frontend_code.get("styles_code"))
 
         if not (src_dir / entry_file_name).exists():
             if entry_code:
                 (src_dir / entry_file_name).write_text(entry_code, encoding="utf-8")
+            elif is_vanilla:
+                (src_dir / entry_file_name).write_text(
+                    ("import './index.css';\n" if has_css else "")
+                    + f"import './{main_app_file_name}';\n",
+                    encoding="utf-8",
+                )
             else:
                 (src_dir / entry_file_name).write_text(
                     "import React from 'react';\n"
@@ -244,14 +255,23 @@ def write_project_files(job_id: str, state: dict):
                 )
 
         if not (fe_dir / "vite.config.js").exists():
-            (fe_dir / "vite.config.js").write_text(
-                "import { defineConfig } from 'vite';\n"
-                "import react from '@vitejs/plugin-react';\n\n"
-                "export default defineConfig({\n"
-                "  plugins: [react()],\n"
-                "});\n",
-                encoding="utf-8",
-            )
+            if is_vanilla:
+                (fe_dir / "vite.config.js").write_text(
+                    "import { defineConfig } from 'vite';\n\n"
+                    "export default defineConfig({\n"
+                    "  server: { port: 5173 }\n"
+                    "});\n",
+                    encoding="utf-8",
+                )
+            else:
+                (fe_dir / "vite.config.js").write_text(
+                    "import { defineConfig } from 'vite';\n"
+                    "import react from '@vitejs/plugin-react';\n\n"
+                    "export default defineConfig({\n"
+                    "  plugins: [react()],\n"
+                    "});\n",
+                    encoding="utf-8",
+                )
 
         # If no package.json was provided by the LLM, write a safe Vite default.
         if not (fe_dir / "package.json").exists():

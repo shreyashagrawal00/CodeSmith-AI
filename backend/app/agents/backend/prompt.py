@@ -38,6 +38,21 @@ must contain an entry with path="middleware/authMiddleware.js".
 Do NOT generate imports for files you are not also providing in extra_files.
 Every single import from a relative path must be resolvable from the files you output.
 
+CRITICAL RULE FOR FRONTEND-ONLY / NO-BACKEND PROJECTS:
+- If the system design or API design indicates that NO backend API is required (e.g., frontend-only, client-side calculator, static app, standalone widget, api_design is 'None'):
+  * framework: "None"
+  * language: "None"
+  * main_file: "# No backend required for frontend-only application"
+  * main_file_name: "none"
+  * models_code: ""
+  * routes_code: ""
+  * services_code: ""
+  * extra_files: []
+  * dependency_manifest: ""
+  * dependency_manifest_name: ""
+  * dockerfile: ""
+- Do NOT generate backend API code if no backend was requested.
+
 CRITICAL RULE FOR DEPENDENCIES:
 - Only specify REAL, existing dependencies in dependency_manifest (requirements.txt / package.json).
 - For Node.js / Express, double-check package names on npm:

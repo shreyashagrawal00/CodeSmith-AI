@@ -41,6 +41,30 @@ The entry point must be main.jsx that mounts App into <div id="root">.
 Include App component, key page components, API client (using fetch or axios), and a Dockerfile.
 Use React with modern hooks and clean, responsive design.
 
+CRITICAL RULE FOR PLAIN HTML/CSS/JS (VANILLA JAVASCRIPT) REQUESTS:
+- Check Tech Stack: If Tech Stack specifies "Vanilla JavaScript", "HTML/CSS/JS", "HTML5", or plain JavaScript (without React):
+  * `framework`: "vanilla"
+  * `main_app_file_name`: "app.js"
+  * `main_app_code`: Pure Vanilla JavaScript DOM manipulation code (using document.querySelector, addEventListener, DOM event handling). Do NOT output React JSX or React imports!
+  * `styles_code`: Complete CSS styling for the application layout.
+  * `index_html`: Complete HTML5 document structure containing all markup elements (calculator grid, inputs, buttons, containers) and module script link `<script type="module" src="/src/main.js"></script>`.
+  * `entry_point_file_name`: "main.js"
+  * `entry_point_code`: `import "./index.css";\nimport "./app.js";\n`
+
+CRITICAL RULE FOR LOCAL STORAGE / BROWSER PERSISTENCE:
+- If the user or architecture specifies using `localStorage`, `sessionStorage`, or `IndexedDB` for database/persistence:
+  * Implement full client-side CRUD helpers in `api_client_code` (or custom React hooks like `useLocalStorage`) that read/write JSON data to `window.localStorage`.
+  * Ensure state is automatically initialized from `localStorage` on component mount and saved back to `localStorage` on any state update.
+  * Do NOT attempt to make HTTP backend server calls when using client-side `localStorage`.
+
+CRITICAL RULE FOR FRONTEND-ONLY / CLIENT-SIDE APPLICATIONS:
+- Check if the application is frontend-only (e.g. no backend/API required, such as a calculator, static tool, interactive widget, or client-side app, or if API Design is 'None').
+- If no backend API is required:
+  * ALL app logic, calculations, state management, and UI interactions MUST be fully implemented in client-side React code (components/hooks) or Vanilla JS.
+  * Do NOT make fetch/axios network calls to non-existent backend endpoints!
+  * Ensure the application is 100% fully functional out-of-the-box in the browser.
+  * In `api_client_code`, provide a simple helper or client-side storage utility (e.g., localStorage helper functions).
+
 Return ONLY the requested structured output.
             """,
         ),

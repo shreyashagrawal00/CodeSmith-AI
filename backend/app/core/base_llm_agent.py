@@ -192,7 +192,7 @@ class BaseLLMAgent(BaseAgent):
                         )
                         if val is None or (val == "" and not allows_blank_string):
                             raise ValueError(f"Required field '{field}' is empty.")
-                        if field in ("features", "tech_stack", "components", "tables") \
+                        if field in ("features", "tech_stack", "components") \
                                 and isinstance(val, list) and len(val) == 0:
                             raise ValueError(f"Collection field '{field}' must not be empty.")
 

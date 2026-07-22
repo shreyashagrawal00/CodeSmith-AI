@@ -393,17 +393,19 @@ def start_preview(job_id: str, project_dir: str) -> dict:
         # 1. Backend: detect Python vs Node.js and run the appropriate
         #    install/start commands -- previously this always assumed
         #    Python/pip/uvicorn regardless of what was actually generated.
+        has_runnable_backend = False
         if os.path.exists(backend_path):
             runtime = _detect_backend_runtime(backend_path)
             if runtime == "python":
+                has_runnable_backend = True
                 python_exe = _resolve_python()
                 backend_proc = _start_python_backend(python_exe, backend_path, backend_port)
             elif runtime == "node":
+                has_runnable_backend = True
                 backend_proc = _start_node_backend(backend_path, backend_port)
             else:
-                logger.error(
-                    "Backend for job %s has neither requirements.txt nor package.json -- "
-                    "can't determine how to run it.", job_id,
+                logger.info(
+                    "No runnable backend manifest for job %s — treating as frontend-only application.", job_id,
                 )
 
             if backend_proc is not None:
@@ -475,7 +477,7 @@ def start_preview(job_id: str, project_dir: str) -> dict:
             result["backend_url"] = f"http://localhost:{backend_port}"
         if frontend_up:
             result["frontend_url"] = f"http://localhost:{frontend_port}"
-        if not backend_up and os.path.exists(backend_path):
+        if not backend_up and has_runnable_backend:
             result["backend_error"] = "Backend preview server failed to start in time."
         if not frontend_up and os.path.exists(frontend_path):
             result["frontend_error"] = "Frontend preview server failed to start in time."
