@@ -142,59 +142,48 @@ async def run_workflow(job_id: str):
         config = {"configurable": {"thread_id": job_id}}
 
         async for state_chunk in graph.astream(initial_state, config=config, stream_mode="values"):
-            # Merge in whatever has completed so far — the websocket loop
-            # picks this up on its next 0.5s poll.
-            _jobs[job_id].update(state_chunk)
-            crud.update_project(job_id, _jobs[job_id])
+            job = _jobs.get(job_id)
+            if job is not None:
+                job.update(state_chunk)
+                crud.update_project(job_id, job)
 
         # Check if the graph is paused at an interrupt or has finished
         state = await graph.aget_state(config)
+        job = _jobs.get(job_id)
+        if job is not None:
+            if not state.next:
+                # Finished completely
+                job["status"] = "completed"
 
-        if not state.next:
-            # Finished completely
-            _jobs[job_id]["status"] = "completed"
+                # Post-completion tasks
+                from app.services.project_service import write_project_files
+                from app.services.report_service import zip_project
+                from app.services.preview_service import start_preview
 
-            # Post-completion tasks
-            from app.services.project_service import write_project_files
-            from app.services.report_service import zip_project
-            from app.services.preview_service import start_preview
+                project_dir = write_project_files(job_id, job)
+                zip_project(job_id)
+                preview_res = start_preview(job_id, project_dir)
+                job["preview"] = {
+                    "frontend_url": preview_res.get("frontend_url"),
+                    "backend_url": preview_res.get("backend_url"),
+                    "backend_error": preview_res.get("backend_error"),
+                    "frontend_error": preview_res.get("frontend_error"),
+                    "error": preview_res.get("error"),
+                }
+            else:
+                # Paused at interrupt
+                job["status"] = "paused"
+                job["current_agent"] = state.next[0]
 
-            project_dir = write_project_files(job_id, _jobs[job_id])
-            zip_project(job_id)
-            preview_res = start_preview(job_id, project_dir)
-            # NOTE: preview_res["success"] is (backend_up OR frontend_up),
-            # so it can be True while only ONE of the two URL keys exists.
-            # Bracket access on the other key raised a KeyError here that
-            # silently flipped a successfully-completed job to
-            # status="failed" -- the job actually finished fine, but the
-            # crash destroyed that status and all visibility into why no
-            # preview appeared. .get() + always recording whatever
-            # succeeded/failed fixes both problems.
-            _jobs[job_id]["preview"] = {
-                "frontend_url": preview_res.get("frontend_url"),
-                "backend_url": preview_res.get("backend_url"),
-                "backend_error": preview_res.get("backend_error"),
-                "frontend_error": preview_res.get("frontend_error"),
-                "error": preview_res.get("error"),
-            }
-        else:
-            # Paused at interrupt
-            _jobs[job_id]["status"] = "paused"
-            _jobs[job_id]["current_agent"] = state.next[0]
-
-        crud.update_project(job_id, _jobs[job_id])
+            crud.update_project(job_id, job)
 
     except Exception as e:
-        # Use .get() here to avoid a second KeyError if the job was somehow
-        # removed from _jobs between the initial guard check and this handler.
         job = _jobs.get(job_id)
         if job is not None:
             job["status"] = "failed"
             job["error"] = str(e)
             crud.update_project(job_id, job)
         else:
-            # Job is no longer tracked in memory — persist what we can
-            # directly via CRUD so the failure isn't silently swallowed.
             crud.update_project(job_id, {"status": "failed", "error": str(e)})
 
 
@@ -221,50 +210,45 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         )
 
         # Update local job status back to running for the UI
-        _jobs[job_id]["status"] = "running"
+        job["status"] = "running"
 
         # 2. Resume execution (passing None tells LangGraph to continue from
         #    checkpoint), streaming node-by-node so progress is visible live.
         async for state_chunk in graph.astream(None, config=config, stream_mode="values"):
-            _jobs[job_id].update(state_chunk)
-            crud.update_project(job_id, _jobs[job_id])
+            job = _jobs.get(job_id)
+            if job is not None:
+                job.update(state_chunk)
+                crud.update_project(job_id, job)
 
         # Check if the graph is paused at another interrupt or has finished
         state = await graph.aget_state(config)
+        job = _jobs.get(job_id)
+        if job is not None:
+            if not state.next:
+                # Finished completely
+                job["status"] = "completed"
 
-        if not state.next:
-            # Finished completely
-            _jobs[job_id]["status"] = "completed"
+                # Post-completion tasks
+                from app.services.project_service import write_project_files
+                from app.services.report_service import zip_project
+                from app.services.preview_service import start_preview
 
-            # Post-completion tasks
-            from app.services.project_service import write_project_files
-            from app.services.report_service import zip_project
-            from app.services.preview_service import start_preview
+                project_dir = write_project_files(job_id, job)
+                zip_project(job_id)
+                preview_res = start_preview(job_id, project_dir)
+                job["preview"] = {
+                    "frontend_url": preview_res.get("frontend_url"),
+                    "backend_url": preview_res.get("backend_url"),
+                    "backend_error": preview_res.get("backend_error"),
+                    "frontend_error": preview_res.get("frontend_error"),
+                    "error": preview_res.get("error"),
+                }
+            else:
+                # Paused at another interrupt
+                job["status"] = "paused"
+                job["current_agent"] = state.next[0]
 
-            project_dir = write_project_files(job_id, _jobs[job_id])
-            zip_project(job_id)
-            preview_res = start_preview(job_id, project_dir)
-            # NOTE: preview_res["success"] is (backend_up OR frontend_up),
-            # so it can be True while only ONE of the two URL keys exists.
-            # Bracket access on the other key raised a KeyError here that
-            # silently flipped a successfully-completed job to
-            # status="failed" -- the job actually finished fine, but the
-            # crash destroyed that status and all visibility into why no
-            # preview appeared. .get() + always recording whatever
-            # succeeded/failed fixes both problems.
-            _jobs[job_id]["preview"] = {
-                "frontend_url": preview_res.get("frontend_url"),
-                "backend_url": preview_res.get("backend_url"),
-                "backend_error": preview_res.get("backend_error"),
-                "frontend_error": preview_res.get("frontend_error"),
-                "error": preview_res.get("error"),
-            }
-        else:
-            # Paused at another interrupt
-            _jobs[job_id]["status"] = "paused"
-            _jobs[job_id]["current_agent"] = state.next[0]
-
-        crud.update_project(job_id, _jobs[job_id])
+            crud.update_project(job_id, job)
 
     except Exception as e:
         job = _jobs.get(job_id)

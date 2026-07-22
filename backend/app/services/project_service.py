@@ -122,7 +122,15 @@ def write_project_files(job_id: str, state: dict):
 
         dependency_manifest_name = backend_code.get("dependency_manifest_name") or "requirements.txt"
         if backend_code.get("dependency_manifest"):
-            (be_dir / dependency_manifest_name).write_text(backend_code["dependency_manifest"], encoding="utf-8")
+            manifest_content = backend_code["dependency_manifest"]
+            if dependency_manifest_name == "package.json":
+                try:
+                    pkg = json.loads(manifest_content)
+                    pkg["type"] = "module"
+                    manifest_content = json.dumps(pkg, indent=2)
+                except Exception:
+                    pass
+            (be_dir / dependency_manifest_name).write_text(manifest_content, encoding="utf-8")
         if backend_code.get("dockerfile"):
             (be_dir / "Dockerfile").write_text(backend_code["dockerfile"], encoding="utf-8")
 
@@ -311,7 +319,10 @@ def write_project_files(job_id: str, state: dict):
         (docs_dir / "setup.md").write_text(documentation["setup_guide_md"], encoding="utf-8")
 
     # Save full state as JSON
-    (project_dir / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    try:
+        (project_dir / "state.json").write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+    except Exception:
+        pass
 
     return str(project_dir)
 

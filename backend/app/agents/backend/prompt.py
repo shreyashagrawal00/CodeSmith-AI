@@ -59,6 +59,7 @@ CRITICAL RULE FOR DEPENDENCIES:
   * Use 'express-rate-limit' (NOT 'rate-limit')
   * Use 'jsonwebtoken' (NOT 'jwt')
   * Use 'bcryptjs' or 'bcrypt'
+- For Node.js package.json manifests, always specify `"type": "module"` in package.json.
 - Never invent non-existent package names.
 
 Return ONLY the requested structured output.
