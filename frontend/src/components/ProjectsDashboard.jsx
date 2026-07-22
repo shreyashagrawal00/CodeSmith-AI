@@ -96,7 +96,7 @@ function ProjectCard({ project, onOpen, onDownload, onDelete }) {
               {project.project_name || "(Untitled Project)"}
             </h3>
             <p className="text-xs text-slate-500 truncate mt-0.5 italic">
-              "{project.user_prompt}"
+              &quot;{project.user_prompt}&quot;
             </p>
           </div>
         </div>

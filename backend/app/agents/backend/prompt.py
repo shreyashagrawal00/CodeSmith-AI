@@ -38,7 +38,13 @@ must contain an entry with path="middleware/authMiddleware.js".
 Do NOT generate imports for files you are not also providing in extra_files.
 Every single import from a relative path must be resolvable from the files you output.
 
-Include a dependency manifest file appropriate for the language (requirements.txt for Python, package.json for Node.js), and a Dockerfile.
+CRITICAL RULE FOR DEPENDENCIES:
+- Only specify REAL, existing dependencies in dependency_manifest (requirements.txt / package.json).
+- For Node.js / Express, double-check package names on npm:
+  * Use 'express-rate-limit' (NOT 'rate-limit')
+  * Use 'jsonwebtoken' (NOT 'jwt')
+  * Use 'bcryptjs' or 'bcrypt'
+- Never invent non-existent package names.
 
 Return ONLY the requested structured output.
             """,

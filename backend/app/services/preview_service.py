@@ -90,13 +90,6 @@ def _normalize_frontend_package_json(frontend_path: str) -> None:
             json.dump(pkg, f, indent=2)
 
 
-# Active preview processes: job_id -> { "backend_proc": Popen, "frontend_proc": Popen, "backend_port": int, "frontend_port": int }
-_active_previews: Dict[str, dict] = {}
-
-# How long to wait for each dependency-install step and each server to come up.
-_INSTALL_TIMEOUT_SECS = 180
-_PORT_WAIT_TIMEOUT_SECS = 30
-_PORT_WAIT_POLL_INTERVAL = 0.5
 
 
 def get_free_port() -> int:
@@ -162,13 +155,13 @@ def _run_blocking(cmd: list, cwd: str, timeout: int) -> None:
 
 def _pip_available(python_exe: str) -> bool:
     try:
-        subprocess.run(
+        proc = subprocess.run(
             [python_exe, "-m", "pip", "--version"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=15,
         )
-        return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return proc.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
         return False
     except Exception:
         return False
@@ -247,16 +240,107 @@ def _start_python_backend(python_exe: str, backend_path: str, port: int) -> subp
     )
 
 
+def _fix_notarget_package(backend_path: str, npm_error_text: str) -> bool:
+    """Remove the first bad package name from package.json after a NOTARGET error.
+
+    LLMs occasionally hallucinate npm package names (e.g. 'rate-limit' instead
+    of 'express-rate-limit'). When npm reports NOTARGET we extract the package
+    name from the error text, remove it from package.json, and return True so
+    the caller can retry install without it.  Returns False if we can't parse
+    the error or can't find the package in the manifest.
+    """
+    import re as _re
+    # npm error text typically contains:
+    #   "No matching version found for <pkg>@<ver>"
+    match = _re.search(r"No matching version found for ([^\s@]+)@", npm_error_text)
+    if not match:
+        # Also try: "notarget No matching version found for <pkg>"
+        match = _re.search(r"notarget.*?for ([^\s@]+)(?:@|$)", npm_error_text)
+    if not match:
+        return False
+
+    bad_pkg = match.group(1).strip()
+    pkg_path = os.path.join(backend_path, "package.json")
+    try:
+        with open(pkg_path, "r", encoding="utf-8") as f:
+            pkg = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    removed = False
+    for section in ("dependencies", "devDependencies", "peerDependencies"):
+        if bad_pkg in pkg.get(section, {}):
+            del pkg[section][bad_pkg]
+            removed = True
+            logger.warning(
+                "Removed hallucinated package '%s' from backend package.json and retrying install.",
+                bad_pkg,
+            )
+
+    if removed:
+        try:
+            with open(pkg_path, "w", encoding="utf-8") as f:
+                json.dump(pkg, f, indent=2)
+        except OSError:
+            return False
+
+    return removed
+
+
 def _start_node_backend(backend_path: str, port: int) -> subprocess.Popen:
     npm_cmd = "npm.cmd" if os.name == "nt" else "npm"
     node_cmd = "node.exe" if os.name == "nt" else "node"
 
     package_json = os.path.join(backend_path, "package.json")
-    _run_blocking(
-        [npm_cmd, "install", "--silent"],
-        cwd=backend_path,
-        timeout=_INSTALL_TIMEOUT_SECS,
-    )
+
+    # --- npm install with progressive fallback strategy ---
+    # 1. Plain install (no --silent so errors are fully visible)
+    # 2. --legacy-peer-deps if peer-dep conflict detected
+    # 3. Strip hallucinated/nonexistent packages and retry (up to 3 bad pkgs)
+    _MAX_NOTARGET_RETRIES = 3
+    last_err: Optional[RuntimeError] = None
+    for attempt in range(_MAX_NOTARGET_RETRIES + 1):
+        try:
+            _run_blocking(
+                [npm_cmd, "install"],
+                cwd=backend_path,
+                timeout=_INSTALL_TIMEOUT_SECS,
+            )
+            last_err = None
+            break  # success
+        except RuntimeError as e:
+            err_text = str(e)
+            last_err = e
+
+            if "ERESOLVE" in err_text or "peer dep" in err_text.lower():
+                # Peer-dep conflict — retry once with --legacy-peer-deps
+                logger.warning(
+                    "npm install failed with peer-dep conflict for Node.js backend; "
+                    "retrying with --legacy-peer-deps"
+                )
+                try:
+                    _run_blocking(
+                        [npm_cmd, "install", "--legacy-peer-deps"],
+                        cwd=backend_path,
+                        timeout=_INSTALL_TIMEOUT_SECS,
+                    )
+                    last_err = None
+                    break
+                except RuntimeError as legacy_err:
+                    last_err = legacy_err
+                    break  # give up after one legacy-peer-deps attempt
+
+            elif "ETARGET" in err_text or "notarget" in err_text.lower() or "No matching version" in err_text:
+                # LLM hallucinated a package name — strip it and retry
+                if attempt < _MAX_NOTARGET_RETRIES and _fix_notarget_package(backend_path, err_text):
+                    continue  # retry install with the bad package removed
+                break  # can't fix further
+
+            else:
+                break  # unknown error, propagate immediately
+
+    if last_err is not None:
+        raise last_err
 
     # Prefer an npm "start" script if one is defined; otherwise fall back
     # to running the detected entry file directly with node.

@@ -62,7 +62,7 @@ export default function ProgressBar({ currentAgent, log, status, jobId, onSkip }
           const entryStatus = statusByAgent.get(agent.id);
           const hasLogEntry = statusByAgent.has(agent.id);
           const isSkipped = entryStatus === "skipped";
-          const isCompleted = hasLogEntry && !isSkipped && (entryStatus !== "skipped");
+          const isCompleted = hasLogEntry && !isSkipped;
           const isJobDoneNoEntry = status === "completed" && !hasLogEntry && !isSkipped;
           const isActive = currentAgent === agent.id && status === "running";
           const skipPending = skipRequested.has(agent.id);

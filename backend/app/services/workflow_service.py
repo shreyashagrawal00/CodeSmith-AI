@@ -110,6 +110,7 @@ async def run_workflow(job_id: str):
     if job is None:
         return
 
+
     try:
         initial_state: ProjectState = {
             "user_prompt": job["user_prompt"],
@@ -135,6 +136,7 @@ async def run_workflow(job_id: str):
             "review_approved": False,
             "quality_score": 0.0,
             "correction_iterations": 0,
+            "compilation_errors": "",
         }
 
         config = {"configurable": {"thread_id": job_id}}
@@ -183,9 +185,17 @@ async def run_workflow(job_id: str):
         crud.update_project(job_id, _jobs[job_id])
 
     except Exception as e:
-        _jobs[job_id]["status"] = "failed"
-        _jobs[job_id]["error"] = str(e)
-        crud.update_project(job_id, _jobs[job_id])
+        # Use .get() here to avoid a second KeyError if the job was somehow
+        # removed from _jobs between the initial guard check and this handler.
+        job = _jobs.get(job_id)
+        if job is not None:
+            job["status"] = "failed"
+            job["error"] = str(e)
+            crud.update_project(job_id, job)
+        else:
+            # Job is no longer tracked in memory — persist what we can
+            # directly via CRUD so the failure isn't silently swallowed.
+            crud.update_project(job_id, {"status": "failed", "error": str(e)})
 
 
 async def resume_workflow(job_id: str, approved: bool, feedback: str):
@@ -257,9 +267,13 @@ async def resume_workflow(job_id: str, approved: bool, feedback: str):
         crud.update_project(job_id, _jobs[job_id])
 
     except Exception as e:
-        _jobs[job_id]["status"] = "failed"
-        _jobs[job_id]["error"] = str(e)
-        crud.update_project(job_id, _jobs[job_id])
+        job = _jobs.get(job_id)
+        if job is not None:
+            job["status"] = "failed"
+            job["error"] = str(e)
+            crud.update_project(job_id, job)
+        else:
+            crud.update_project(job_id, {"status": "failed", "error": str(e)})
 
 
 async def run_manual_fix(job_id: str, feedback: str):
@@ -318,6 +332,10 @@ async def run_manual_fix(job_id: str, feedback: str):
         crud.update_project(job_id, job)
 
     except Exception as e:
-        job["status"] = "failed"
-        job["error"] = str(e)
-        crud.update_project(job_id, job)
+        job = _jobs.get(job_id)
+        if job is not None:
+            job["status"] = "failed"
+            job["error"] = str(e)
+            crud.update_project(job_id, job)
+        else:
+            crud.update_project(job_id, {"status": "failed", "error": str(e)})
