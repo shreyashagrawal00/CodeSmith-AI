@@ -1,27 +1,29 @@
-"""SQLite-backed persistence for project/job history.
-
-Why this exists: the generated project *files* were always written to disk
-(backend/generated_projects/{job_id}/), so they already survived a backend
-restart. But the job *metadata* (prompt, status, project name, timestamps)
-only ever lived in workflow_service's in-memory `_jobs` dict -- so a restart
-meant you could no longer list your past projects or look up their status,
-even though the underlying files were still sitting right there.
-
-This module gives that metadata a real home in SQLite so "my old projects"
-persists across restarts.
+"""SQLite-backed persistence for project/job history (local dev).
+In production, set the DATABASE_URL environment variable to a PostgreSQL
+connection string (e.g. from Neon: postgresql://user:pass@host/db?sslmode=require).
+SQLAlchemy handles both drivers transparently -- no other code needs to change.
 """
+import os
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Lives next to generated_projects/, at backend/codesmith.db
-BACKEND_DIR = Path(__file__).resolve().parents[2]
-DB_PATH = BACKEND_DIR / "codesmith.db"
+# --- Connection URL ---
+# Production: set DATABASE_URL in your Render environment variables.
+# Local dev:  falls back to the SQLite file next to generated_projects/.
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_SQLITE_FALLBACK = f"sqlite:///{_BACKEND_DIR / 'codesmith.db'}"
+DATABASE_URL = os.environ.get("DATABASE_URL", _SQLITE_FALLBACK)
 
-engine = create_engine(
-    f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},  # needed for SQLite + FastAPI's threaded background tasks
-)
+# Neon (and most cloud Postgres providers) give URLs starting with
+# "postgres://" but SQLAlchemy requires "postgresql://".
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# SQLite needs check_same_thread=False; PostgreSQL doesn't accept that arg.
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(DATABASE_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

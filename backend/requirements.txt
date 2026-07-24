@@ -11,6 +11,7 @@ python-dotenv
 pydantic
 typing_extensions
 sqlalchemy
+psycopg2-binary
 aiofiles
 python-multipart
 websockets
