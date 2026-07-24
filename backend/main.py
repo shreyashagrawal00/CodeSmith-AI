@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -23,17 +24,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS – allow the React frontend
+# CORS – allow the React frontend.
+# In production set ALLOWED_ORIGINS as a comma-separated list of URLs, e.g.:
+#   https://codesmith-ai.vercel.app,https://your-custom-domain.com
+_default_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://[::1]:5173",
+    "http://[::1]:3000",
+]
+_extra_origins = [
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+]
+_allow_origins = _default_origins + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "http://[::1]:5173",
-        "http://[::1]:3000",
-    ],
+    allow_origins=_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
