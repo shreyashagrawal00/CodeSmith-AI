@@ -53,7 +53,10 @@ CRITICAL RULE FOR PLAIN HTML/CSS/JS (VANILLA JAVASCRIPT) REQUESTS:
 
 CRITICAL RULE FOR LOCAL STORAGE / BROWSER PERSISTENCE:
 - If the user or architecture specifies using `localStorage`, `sessionStorage`, or `IndexedDB` for database/persistence:
-  * Implement full client-side CRUD helpers in `api_client_code` (or custom React hooks like `useLocalStorage`) that read/write JSON data to `window.localStorage`.
+  * Implement full client-side CRUD helpers DIRECTLY inside the component or in a dedicated `storage.js` utility file (NOT in `api.js`).
+  * Name the utility file `storage.js` (inside src/), NOT `api.js`. Import it as `import storage from './storage'` or `import storage from '../storage'` depending on the file location.
+  * Do NOT generate an `api.js` file at all.
+  * Do NOT import from `'../api'` or `'./api'` anywhere in the project.
   * Ensure state is automatically initialized from `localStorage` on component mount and saved back to `localStorage` on any state update.
   * Do NOT attempt to make HTTP backend server calls when using client-side `localStorage`.
 
@@ -62,8 +65,9 @@ CRITICAL RULE FOR FRONTEND-ONLY / CLIENT-SIDE APPLICATIONS:
 - If no backend API is required:
   * ALL app logic, calculations, state management, and UI interactions MUST be fully implemented in client-side React code (components/hooks) or Vanilla JS.
   * Do NOT make fetch/axios network calls to non-existent backend endpoints!
+  * Do NOT generate an `api.js` file. Do NOT import from `'../api'` or `'./api'`.
   * Ensure the application is 100% fully functional out-of-the-box in the browser.
-  * In `api_client_code`, provide a simple helper or client-side storage utility (e.g., localStorage helper functions).
+  * If state persistence is needed, use `localStorage` helpers defined directly in the component or in a `storage.js` utility file.
 
 Return ONLY the requested structured output.
             """,
