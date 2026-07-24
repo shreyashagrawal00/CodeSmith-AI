@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import API_BASE, { WS_BASE } from "./config";
 import { Terminal, Download, Cpu, RefreshCw, ExternalLink, Globe, FolderOpen, Plus } from "lucide-react";
 import ProjectForm from "./components/ProjectForm";
 import ProgressBar from "./components/ProgressBar";
@@ -29,7 +30,7 @@ export default function App() {
 
   const handleSkip = async (agentId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/skip/${jobId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/skip/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent: agentId }),
@@ -59,7 +60,7 @@ export default function App() {
     setSubmitLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/approve/${jobId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/approve/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approved, feedback }),
@@ -125,7 +126,7 @@ export default function App() {
     setError(null);
     setProjectData(null);
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/generate", {
+      const response = await fetch(`${API_BASE}/api/v1/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
@@ -143,7 +144,7 @@ export default function App() {
 
   const fetchResult = useCallback(async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/result/${jobId}`);
+      const response = await fetch(`${API_BASE}/api/v1/result/${jobId}`);
       if (!response.ok) return; // e.g. job just flipped to "failed" mid-poll; the status poller already surfaces that error
       const data = await response.json();
       setProjectData(data);
@@ -157,7 +158,7 @@ export default function App() {
   const startPolling = useCallback(() => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/status/${jobId}`);
+        const response = await fetch(`${API_BASE}/api/v1/status/${jobId}`);
         const data = await response.json();
         setStatus(data.status);
         setCurrentAgent(data.current_agent);
@@ -187,7 +188,7 @@ export default function App() {
 
     let socket;
     try {
-      socket = new WebSocket(`ws://127.0.0.1:8000/ws/${jobId}`);
+      socket = new WebSocket(`${WS_BASE}/ws/${jobId}`);
       
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -240,14 +241,14 @@ export default function App() {
   }, [jobId, status, startPolling, fetchResult]);
 
   const handleDownload = () => {
-    window.open(`http://127.0.0.1:8000/api/v1/download/${jobId}`);
+    window.open(`${API_BASE}/api/v1/download/${jobId}`);
   };
 
   const handleManualFix = async () => {
     setSubmitLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/fix-job/${jobId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/fix-job/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approved: false, feedback }),
@@ -290,7 +291,7 @@ export default function App() {
     setProjectData(null);
     setLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/result/${pastJobId}`);
+      const res = await fetch(`${API_BASE}/api/v1/result/${pastJobId}`);
       if (!res.ok) throw new Error("Could not load project result.");
       const data = await res.json();
       setJobId(pastJobId);

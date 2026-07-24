@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API_BASE from "../config";
 import {
   Folder,
   CheckCircle,
@@ -169,7 +170,7 @@ export default function ProjectsDashboard({ onOpenProject }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/projects?limit=100");
+      const res = await fetch(`${API_BASE}/api/v1/projects?limit=100`);
       if (!res.ok) throw new Error("Failed to fetch projects");
       const data = await res.json();
       setProjects(data.projects || []);
@@ -185,13 +186,13 @@ export default function ProjectsDashboard({ onOpenProject }) {
   }, []);
 
   const handleDownload = (jobId) => {
-    window.open(`http://127.0.0.1:8000/api/v1/download/${jobId}`);
+    window.open(`${API_BASE}/api/v1/download/${jobId}`);
   };
 
   const handleDeleteConfirm = async (jobId) => {
     setDeleting(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${jobId}`, {
+      const res = await fetch(`${API_BASE}/api/v1/projects/${jobId}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete project");
