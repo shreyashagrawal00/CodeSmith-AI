@@ -6,10 +6,9 @@ from app.config import settings
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # A solid, broadly-capable free model on OpenRouter. Free-tier model
-# availability on OpenRouter can change, so this is intentionally a
-# single override point — check https://openrouter.ai/models?max_price=0
+# availability on OpenRouter can change — check https://openrouter.ai/models?max_price=0
 # for the current free roster if this model is retired.
-DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3.5-lightning:free"
 
 
 def get_openrouter_llm(

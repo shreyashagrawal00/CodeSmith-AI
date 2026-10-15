@@ -6,14 +6,12 @@ from app.config import settings
 # same pattern as OpenRouter and Cerebras.
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-# meta/llama-3.3-70b-instruct is explicitly documented as supporting
-# structured output / tool calling (required for this project's
-# .with_structured_output() usage), which is why it's the default rather
-# than picking an arbitrary model from NVIDIA's 100+ catalog. As with
-# Cerebras, NVIDIA's free catalog does see deprecations over time -- check
-# https://build.nvidia.com/models or GET /v1/models with your key for the
-# current roster if this one is ever retired.
-DEFAULT_NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
+# nvidia/llama-3.1-nemotron-70b-instruct — confirmed available Oct 2026,
+# supports tool calling / structured output required by .with_structured_output().
+# meta/llama-3.3-70b-instruct was retired (410 EOL 2026-08-26).
+# To verify the live roster for your account:
+#   curl https://integrate.api.nvidia.com/v1/models -H "Authorization: Bearer $NVIDIA_API_KEY"
+DEFAULT_NVIDIA_MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
 
 
 def get_nvidia_llm(

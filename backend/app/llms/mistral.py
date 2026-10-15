@@ -2,8 +2,10 @@ from langchain_mistralai import ChatMistralAI
 from app.config import settings
 
 
+# codestral-latest is Mistral's code model and is supported on free-tier API keys.
+# mistral-large-latest returns 403 on free-tier keys.
 def get_mistral_llm(
-    model: str = "mistral-large-latest",
+    model: str = "codestral-latest",
     temperature: float = 0.2,
 ) -> ChatMistralAI:
     """Factory: create a Mistral LLM instance on demand.

@@ -1,11 +1,12 @@
-"""SQLite-backed persistence for project/job history (local dev).
-In production, set the DATABASE_URL environment variable to a PostgreSQL
-connection string (e.g. from Neon: postgresql://user:pass@host/db?sslmode=require).
-SQLAlchemy handles both drivers transparently -- no other code needs to change.
+"""Database persistence for project/job history.
+Locally falls back to SQLite; in production uses Neon PostgreSQL via DATABASE_URL.
+Neon's connection pooler (PgBouncer) requires NullPool so SQLAlchemy does not
+maintain its own connection pool on top of it.
 """
 import os
 from pathlib import Path
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # --- Connection URL ---
@@ -23,7 +24,13 @@ if DATABASE_URL.startswith("postgres://"):
 # SQLite needs check_same_thread=False; PostgreSQL doesn't accept that arg.
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+# Use NullPool for Neon/PgBouncer pooler URLs to avoid "prepared statement" errors.
+_is_postgres = DATABASE_URL.startswith("postgresql")
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=_connect_args,
+    poolclass=NullPool if _is_postgres else None,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

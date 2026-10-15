@@ -2,8 +2,14 @@ from langchain_groq import ChatGroq
 from app.config import settings
 
 
+# openai/gpt-oss-120b is the current default on Groq (Oct 2026) and supports
+# function calling / tool use. llama-3.3-70b-versatile is still listed in docs
+# but returns 403 on free-tier accounts — use openai/gpt-oss-120b instead.
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+
+
 def get_groq_llm(
-    model: str = "llama-3.3-70b-versatile",
+    model: str = DEFAULT_GROQ_MODEL,
     temperature: float = 0.2,
 ) -> ChatGroq:
     """Factory: create a Groq LLM instance on demand.
